@@ -956,6 +956,35 @@ async fn get_resource(
     (resp_headers, data).into_response()
 }
 
+async fn bulk_delete_resources(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "unauthorized"}))).into_response(),
+    };
+    let ids = match payload.get("ids").and_then(|v| v.as_array()) {
+        Some(arr) => arr,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "ids required"}))).into_response(),
+    };
+    let storage = resource_storage_dir();
+    let mut deleted = 0;
+    for id_val in ids {
+        if let Some(id) = id_val.as_i64() {
+            if let Ok(Some(res)) = state.db.get_resource(id, user_id) {
+                let filepath = storage.join(&res.1);
+                tokio::fs::remove_file(&filepath).await.ok();
+                if state.db.delete_resource(id, user_id).is_ok() {
+                    deleted += 1;
+                }
+            }
+        }
+    }
+    (StatusCode::OK, Json(json!({"deleted": deleted}))).into_response()
+}
+
 async fn delete_resource(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
@@ -1122,6 +1151,26 @@ async fn get_search(
     })).into_response()
 }
 
+async fn get_memos_json(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!([]))).into_response(),
+    };
+    let memos = if let Some(q) = params.get("q").filter(|s| !s.is_empty()) {
+        state.db.search_memos(user_id, q).unwrap_or_default()
+    } else {
+        state.db.get_memos(user_id).unwrap_or_default()
+    };
+    let list: Vec<serde_json::Value> = memos.iter().map(|(id, title, content, visibility, _created_at)| {
+        json!({"id": id, "title": title, "content": content, "visibility": visibility})
+    }).collect();
+    (StatusCode::OK, Json(json!(list))).into_response()
+}
+
 async fn get_sidebar_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
@@ -1165,12 +1214,14 @@ async fn main() {
         .route("/memos", post(post_memos))
         .route("/memos/:id", put(put_memos).delete(delete_memo))
         .route("/resources", post(post_resources))
+        .route("/resources/bulk-delete", post(bulk_delete_resources))
         .route("/resources/:id", get(get_resource).delete(delete_resource))
         .route("/resources-feed", get(get_resources_feed))
         .route("/notes-panel", get(get_notes_panel))
         .route("/note/:id", get(get_note_detail))
         .route("/memos-feed", get(get_memos_feed))
         .route("/search", get(get_search))
+        .route("/memos-json", get(get_memos_json))
         .route("/sidebar-timeline", get(get_sidebar_timeline))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
