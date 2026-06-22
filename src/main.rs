@@ -69,23 +69,10 @@ fn process_memo_content(
     content: &str,
 ) -> (String, Vec<serde_json::Value>) {
     let mut resources = Vec::new();
-    let mut cleaned_content = String::new();
     let mut remaining = content;
     
     while !remaining.is_empty() {
         if let Some(pos) = remaining.find("/resources/") {
-            let mut start_idx = None;
-            let search_start = if pos > 200 { pos - 200 } else { 0 };
-            let before = &remaining[search_start..pos];
-            if let Some(bracket_pos) = before.rfind('[') {
-                let actual_bracket_pos = search_start + bracket_pos;
-                if actual_bracket_pos > 0 && &remaining[actual_bracket_pos - 1..actual_bracket_pos] == "!" {
-                    start_idx = Some(actual_bracket_pos - 1);
-                } else {
-                    start_idx = Some(actual_bracket_pos);
-                }
-            }
-            
             let id_start = pos + "/resources/".len();
             let sub = &remaining[id_start..];
             if let Some(end_bracket_idx) = sub.find(')') {
@@ -103,28 +90,18 @@ fn process_memo_content(
                             "size": size_formatted,
                         }));
                     }
-                    
-                    if let Some(start) = start_idx {
-                        cleaned_content.push_str(&remaining[..start]);
-                    } else {
-                        cleaned_content.push_str(&remaining[..pos]);
-                    }
-                    
                     let link_end = id_start + end_bracket_idx + 1;
                     remaining = &remaining[link_end..];
                     continue;
                 }
             }
-            
-            cleaned_content.push_str(&remaining[..pos + "/resources/".len()]);
             remaining = &remaining[pos + "/resources/".len()..];
         } else {
-            cleaned_content.push_str(remaining);
             break;
         }
     }
     
-    (cleaned_content.trim().to_string(), resources)
+    (content.trim().to_string(), resources)
 }
 
 fn extract_first_image_id(content: &str) -> Option<i64> {
@@ -1094,6 +1071,27 @@ async fn get_note_detail(
     }
 }
 
+async fn get_memo_edit_form(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let memo = match state.db.get_memo_by_id(id, user_id) {
+        Ok(Some(m)) => m,
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let (id_v, _title, content, visibility, _created_at) = memo;
+    state.templates.render("memo_edit_form", &json!({
+        "id": id_v,
+        "content": content,
+        "visibility": visibility,
+    })).into_response()
+}
+
 async fn get_memos_feed(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
@@ -1213,6 +1211,7 @@ async fn main() {
         .route("/app", get(get_app))
         .route("/memos", post(post_memos))
         .route("/memos/:id", put(put_memos).delete(delete_memo))
+        .route("/memos/:id/edit", get(get_memo_edit_form))
         .route("/resources", post(post_resources))
         .route("/resources/bulk-delete", post(bulk_delete_resources))
         .route("/resources/:id", get(get_resource).delete(delete_resource))

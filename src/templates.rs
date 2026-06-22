@@ -109,7 +109,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .memo-content table { border-collapse: collapse; margin-bottom: 0.5rem; width: 100%; }
         .memo-content th, .memo-content td { border: 1px solid var(--border); padding: 0.375rem 0.75rem; text-align: left; }
         .memo-content th { background: var(--muted); font-weight: 600; }
-        .memo-content img { max-width: 100%; border-radius: 0.5rem; margin: 0.5rem 0; }
+        .memo-content img { max-width: 100%; max-height: 256px; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
         .memo-content ul.task-list { list-style: none; padding-left: 0; }
         .memo-content li.task-list-item { display: flex; align-items: flex-start; gap: 0.375rem; }
         .memo-content li.task-list-item input[type="checkbox"] { margin-top: 0.25rem; }
@@ -150,7 +150,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .tiptap-editor .ProseMirror table { border-collapse: collapse; margin: 0.25rem 0; width: 100%; }
         .tiptap-editor .ProseMirror th, .tiptap-editor .ProseMirror td { border: 1px solid var(--border); padding: 0.25rem 0.5rem; text-align: left; }
         .tiptap-editor .ProseMirror th { background: var(--muted); font-weight: 600; }
-        .tiptap-editor .ProseMirror img { display: block; max-width: 100%; max-height: calc((100vw - 18rem) / 4); height: auto; object-fit: contain; border-radius: 0.5rem; margin: 0.5rem 0; }
+        .tiptap-editor .ProseMirror img { max-width: 100%; max-height: 256px; height: auto; object-fit: contain; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
         .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted-fg); pointer-events: none; float: left; height: 0; }
         .tiptap-editor[data-empty="true"]:not(:has(.ProseMirror)):before { content: attr(data-placeholder); color: var(--muted-fg); pointer-events: none; }
         * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-fg) 45%, transparent) transparent; }
@@ -331,7 +331,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         <!-- Timeline View -->
         <div id="timeline-view" class="flex-1 flex flex-col overflow-hidden">
             <div class="flex-1 overflow-y-auto px-6 py-5">
-                <div class="max-w-2xl mx-auto">
+                <div class="max-w-lg mx-auto">
                     <!-- Memos-style Editor Card -->
                     <form id="memo-form" hx-post="/memos"
                           hx-swap="afterbegin"
@@ -947,14 +947,27 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     function editMemo(id) {
         var card = document.getElementById('memo-' + id);
         if (!card) return;
+        if (window.tiptapEditor) {
+            window.tiptapEditor.destroy();
+            window.tiptapEditor = null;
+        }
         card.querySelector('.memo-display').classList.add('hidden');
-        card.querySelector('.memo-edit').classList.remove('hidden');
+        var editDiv = card.querySelector('.memo-edit');
+        editDiv.classList.remove('hidden');
+        if (!editDiv.querySelector('form')) {
+            htmx.ajax('GET', '/memos/' + id + '/edit', {target: '#memo-edit-' + id, swap: 'innerHTML'});
+        }
     }
     function cancelEdit(id) {
         var card = document.getElementById('memo-' + id);
         if (!card) return;
+        if (window.tiptapEditor) {
+            window.tiptapEditor.destroy();
+            window.tiptapEditor = null;
+        }
         card.querySelector('.memo-display').classList.remove('hidden');
         card.querySelector('.memo-edit').classList.add('hidden');
+        card.querySelector('.memo-edit').innerHTML = '';
     }
     function deleteMemo(id) {
         if (!confirm('Delete this memo?')) return;
@@ -1301,6 +1314,13 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     function closeImageModal() {
         document.getElementById('image-modal').classList.add('hidden');
     }
+    document.addEventListener('click', function(e) {
+        var img = e.target.closest('.memo-content img');
+        if (img) {
+            e.preventDefault();
+            openImageModal(img.src);
+        }
+    });
 </script>
 {% endblock %}"##;
 
@@ -1355,37 +1375,6 @@ const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
         Back to timeline
     </button>
     <div class="memo-content">{{ content_html|safe }}</div>
-    
-    {% if resources and resources|length > 0 %}
-    <div class="mt-3 border border-border rounded-xl overflow-hidden bg-muted/20">
-        <div class="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/30 text-[10px] font-semibold text-muted-fg uppercase tracking-wider">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-            Attachments ({{ resources|length }})
-        </div>
-        <div class="p-3 bg-card space-y-3">
-            {% for res in resources %}
-                {% if res.is_image %}
-                <div class="rounded-lg overflow-hidden border border-border bg-muted/10 flex items-center justify-center" style="max-height:calc((100vw - 18rem)/4)">
-                    <img src="/resources/{{ res.id }}" class="max-w-full object-contain cursor-zoom-in" style="max-height:calc((100vw - 18rem)/4)" loading="lazy" onclick="openImageModal(this.src)">
-                </div>
-                {% else %}
-                <div class="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/40 transition-colors">
-                    <div class="w-8 h-8 rounded border border-border overflow-hidden shrink-0 bg-muted flex items-center justify-center">
-                        <svg class="w-4 h-4 text-muted-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="font-medium truncate text-foreground text-[13px]">{{ res.original_name }}</p>
-                        <p class="text-[10px] text-muted-fg">{{ res.mime_type }} · {{ res.size }}</p>
-                    </div>
-                    <a href="/resources/{{ res.id }}" download class="p-1 rounded text-muted-fg hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Download">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                    </a>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
     
     <p class="text-xs text-gray-400 mt-4 pt-3 border-t border-border">{{ created_at }}</p>
 </div>"#;
@@ -1489,111 +1478,185 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
             {% endfor %}
         </div>
         {% endif %}
-
-        {% if resources and resources|length > 0 %}
-        <div class="mt-3 border border-border rounded-xl overflow-hidden bg-muted/20">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/30 text-[10px] font-semibold text-muted-fg uppercase tracking-wider">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-                Attachments ({{ resources|length }})
-            </div>
-            <div class="p-3 bg-card space-y-3">
-                {% for res in resources %}
-                    {% if res.is_image %}
-                    <div class="rounded-lg overflow-hidden border border-border bg-muted/10 flex items-center justify-center" style="max-height:calc((100vw - 18rem)/4)">
-                        <img src="/resources/{{ res.id }}" class="max-w-full object-contain cursor-zoom-in" style="max-height:calc((100vw - 18rem)/4)" loading="lazy" onclick="openImageModal(this.src)">
-                    </div>
-                    {% else %}
-                    <div class="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/40 transition-colors">
-                        <div class="w-8 h-8 rounded border border-border overflow-hidden shrink-0 bg-muted flex items-center justify-center">
-                            <svg class="w-4 h-4 text-muted-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="font-medium truncate text-foreground text-[13px]">{{ res.original_name }}</p>
-                            <p class="text-[10px] text-muted-fg">{{ res.mime_type }} · {{ res.size }}</p>
-                        </div>
-                        <a href="/resources/{{ res.id }}" download class="p-1 rounded text-muted-fg hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Download">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        </a>
-                    </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
     </div>
-    <div class="memo-edit hidden">
-        <form hx-put="/memos/{{ id }}" hx-target="#memo-{{ id }}" hx-swap="outerHTML" hx-on::after-request="if(event.detail.successful){htmx.trigger('body','memoUpdated')}">
-            <textarea name="content" rows="3" required
-                class="w-full px-3 py-2 bg-white dark:bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-2"
-            >{{ content }}</textarea>
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-1">
-                    {% set vis = visibility|default("private") %}
-                    <div class="visibility-dropdown relative" data-vis="{{ vis }}">
-                        <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
-                            <span class="vis-label flex items-center gap-1">
-                                {% if vis == 'public' %}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Public
-                                {% elif vis == 'protected' %}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>Protected
-                                {% else %}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private{% endif %}
-                            </span>
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                        </button>
-                        <div class="vis-dropdown-menu hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px] z-50">
-                            <button type="button" data-vis-value="public" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                Public
-                            </button>
-                            <button type="button" data-vis-value="protected" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
-                                Protected
-                            </button>
-                            <button type="button" data-vis-value="private" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                                Private
-                            </button>
-                        </div>
-                        <input type="hidden" name="visibility" value="{{ vis }}">
-                    </div>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <button type="button" onclick="cancelEdit({{ id }})"
-                        class="px-3 py-1.5 text-xs font-medium text-muted-fg">Cancel</button>
-                    <button type="submit"
-                        class="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">Save</button>
-                </div>
-            </div>
-        </form>
-    </div>
+    <div class="memo-edit hidden" id="memo-edit-{{ id }}"></div>
 </div>"##;
 
-const MEMO_EDIT_FORM: &str = r##"<form hx-put="/memos/{{ id }}" hx-target="#memo-{{ id }}" hx-swap="outerHTML" hx-on::after-request="if(event.detail.successful){htmx.trigger('body','memoUpdated')}">
-    <textarea name="content" rows="3" required
-        class="w-full px-3 py-2 bg-white dark:bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-2"
-    >{{ content }}</textarea>
-    <div class="flex items-center justify-between">
-        <div class="visibility-dropdown relative" data-vis="private">
-            <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
-                <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div class="vis-dropdown-menu hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px] z-50">
-                <button type="button" data-vis-value="public" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Public
-                </button>
-                <button type="button" data-vis-value="protected" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
-                    Protected
-                </button>
-                <button type="button" data-vis-value="private" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                    Private
-                </button>
-            </div>
-            <input type="hidden" name="visibility" value="private">
+const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-editor mb-0 bg-card border border-border rounded-xl shadow-sm"
+      hx-put="/memos/{{ id }}"
+      hx-target="#memo-{{ id }}"
+      hx-swap="outerHTML"
+      hx-on::after-request="if(event.detail.successful){htmx.trigger('body','memoUpdated')}"
+      ondragover="event.preventDefault(); this.classList.add('border-blue-500')"
+      ondragleave="event.preventDefault(); this.classList.remove('border-blue-500')"
+      ondrop="event.preventDefault(); this.classList.remove('border-blue-500'); handleDrop(event)"
+      onsubmit="document.getElementById('memo-edit-input-{{ id }}').value = getTiptapMarkdown();">
+    <div class="px-4 pt-3 pb-1 relative">
+        <div id="memo-edit-memo-editor-{{ id }}"
+             class="w-full bg-transparent text-foreground text-base leading-relaxed min-h-[6rem] tiptap-editor animate-pulse bg-muted/30 rounded shimmer-bg"
+             data-placeholder="What's on your mind..."
+             data-content="{{ content }}"
+             oninput="onFallbackInput(this)"
+             onkeydown="onFallbackKeydown(event, this)"></div>
+        <div id="attachment-preview-container" class="border border-border rounded-xl bg-card overflow-hidden hidden">
+            <div id="attachment-preview-list" class="flex flex-col"></div>
         </div>
-        <div class="flex items-center gap-1.5">
-            <button type="submit" class="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">Save</button>
+        <input type="hidden" name="content" id="memo-edit-input-{{ id }}" value="{{ content }}">
+    </div>
+    <div id="memo-slash-menu-{{ id }}" class="hidden absolute left-4 bottom-14 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[200px] z-50"></div>
+    <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
+    <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
+    <script>
+    (function() {
+        var mountEl = document.getElementById('memo-edit-memo-editor-{{ id }}');
+        if (!mountEl) return;
+        if (window.Tiptap) {
+            var Editor = window.Tiptap.Editor;
+            var StarterKit = window.Tiptap.StarterKit;
+            var Placeholder = window.Tiptap.Placeholder;
+            var Markdown = window.Tiptap.Markdown;
+            var CodeBlockLowlight = window.Tiptap.CodeBlockLowlight;
+            var lowlight = window.Tiptap.lowlight;
+            var ImageExt = window.Tiptap.Image;
+            var LinkExt = window.Tiptap.Link;
+            mountEl.classList.remove('animate-pulse', 'bg-muted/30', 'rounded', 'shimmer-bg');
+            mountEl.removeAttribute('contenteditable');
+            mountEl.removeAttribute('data-empty');
+            mountEl.oninput = null;
+            mountEl.onkeydown = null;
+            var existingMd = mountEl.getAttribute('data-content') || '';
+            mountEl.removeAttribute('data-content');
+            window.tiptapEditor = new Editor({
+                element: mountEl,
+                extensions: [
+                    StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
+                    Placeholder.configure({ placeholder: "What's on your mind..." }),
+                    Markdown,
+                    CodeBlockLowlight.configure({ lowlight: lowlight }),
+                    ImageExt,
+                    LinkExt.configure({ openOnClick: false }),
+                ],
+                editorProps: {
+                    attributes: { class: 'focus:outline-none text-base leading-relaxed' },
+                    handleDrop: function(view, event, slice, moved) {
+                        if (event.dataTransfer && event.dataTransfer.items && event.dataTransfer.items.length) {
+                            var files = [];
+                            for (var i = 0; i < event.dataTransfer.items.length; i++) {
+                                if (event.dataTransfer.items[i].kind === 'file') {
+                                    var f = event.dataTransfer.items[i].getAsFile();
+                                    if (f) files.push(f);
+                                }
+                            }
+                            if (files.length) { uploadFilesForEditor(files); event.preventDefault(); return true; }
+                        }
+                        return false;
+                    },
+                    handlePaste: function(view, event) {
+                        if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length) {
+                            event.preventDefault(); event.stopPropagation();
+                            uploadFilesForEditor(event.clipboardData.files);
+                            return true;
+                        }
+                        return false;
+                    },
+                    handleKeyDown: function(view, event) {
+                        if (event.key === 'ArrowDown') {
+                            var state = view.state;
+                            var $head = state.selection.$head;
+                            for (var d = $head.depth; d >= 0; d--) {
+                                var node = $head.node(d);
+                                if (node && node.type.name === 'heading') {
+                                    var afterPos = $head.after(d);
+                                    if (afterPos >= state.doc.content.size) {
+                                        event.preventDefault();
+                                        var paragraph = state.schema.nodes.paragraph.create();
+                                        var tr = state.tr.insert(afterPos, paragraph);
+                                        var selClass = state.selection.constructor;
+                                        var newResolved = tr.doc.resolve(afterPos + 1);
+                                        tr.setSelection(selClass.near(newResolved));
+                                        view.dispatch(tr);
+                                        return true;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                },
+                onUpdate: function() {
+                    var ed = window.tiptapEditor;
+                    if (!ed) return;
+                    var isEmpty = ed.isEmpty;
+                    if (isEmpty) {
+                        document.getElementById('memo-edit-input-{{ id }}').value = '';
+                    } else if (ed.storage.markdown) {
+                        var md = ed.storage.markdown.getMarkdown();
+                        document.getElementById('memo-edit-input-{{ id }}').value = md;
+                        isEmpty = md.trim() === '';
+                    } else {
+                        var html = ed.getHTML();
+                        try {
+                            var ts = new TurndownService({ headingStyle: 'atx' });
+                            var md2 = ts.turndown(html);
+                            document.getElementById('memo-edit-input-{{ id }}').value = md2;
+                            isEmpty = md2.trim() === '';
+                        } catch(e) { isEmpty = ed.getText().trim() === ''; }
+                    }
+                    updateSaveButtonState();
+                },
+            });
+            if (existingMd && existingMd.trim()) {
+                window.tiptapEditor.commands.setContent(existingMd, true);
+            }
+        } else {
+            mountEl.classList.remove('animate-pulse', 'bg-muted/30', 'rounded', 'shimmer-bg');
+            mountEl.setAttribute('contenteditable', 'true');
+        }
+    })();
+    (function() {
+        var dd = document.querySelector('#memo-edit-form-{{ id }} .visibility-dropdown');
+        if (dd) updateVisUI(dd);
+    })();
+    </script>
+    <div class="flex items-center justify-between px-4 py-2 border-t border-border">
+        <div class="flex items-center gap-1">
+            <div class="relative">
+                <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </button>
+                <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-h-[200px] overflow-y-auto">
+                    <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
+                </div>
+            </div>
+            <div class="relative">
+                <button type="button" onclick="togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+                <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px]">
+                    <button type="button" onclick="uploadImage()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#128247;</span> Upload Image</button>
+                    <button type="button" onclick="uploadFile()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#128206;</span> Upload File</button>
+                    <button type="button" id="record-audio-btn" onclick="toggleAudioRecording()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#127908;</span><span id="record-label">Record Audio</span></button>
+                    <button type="button" onclick="toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#128279;</span> Link Memo</button>
+                </div>
+                <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
+                    <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search memos..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
+                    <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
+                </div>
+            </div>
+            <div class="visibility-dropdown relative" data-vis="private">
+                <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
+                    <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div class="vis-dropdown-menu hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+                    <button type="button" data-vis-value="public" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Public</button>
+                    <button type="button" data-vis-value="protected" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>Protected</button>
+                    <button type="button" data-vis-value="private" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</button>
+                </div>
+                <input type="hidden" name="visibility" value="private">
+            </div>
+            <button type="submit" class="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">Save</button>
         </div>
     </div>
 </form>"##;
@@ -1729,37 +1792,6 @@ const SHARE_NOTE_TEMPLATE: &str = r##"{% extends "base" %}
         <div class="memo-content text-foreground text-[15px] leading-relaxed mb-4">
             {{ content_html|safe }}
         </div>
-        
-        {% if resources and resources|length > 0 %}
-        <div class="mt-4 border border-border rounded-xl overflow-hidden bg-muted/20">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/30 text-[10px] font-semibold text-muted-fg uppercase tracking-wider">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-                Attachments ({{ resources|length }})
-            </div>
-        <div class="p-3 bg-card space-y-3">
-                {% for res in resources %}
-                    {% if res.is_image %}
-                    <div class="rounded-lg overflow-hidden border border-border bg-muted/10 flex items-center justify-center" style="max-height:calc((100vw - 18rem)/4)">
-                        <img src="/resources/{{ res.id }}" class="max-w-full object-contain cursor-zoom-in" style="max-height:calc((100vw - 18rem)/4)" loading="lazy" onclick="openImageModal(this.src)">
-                    </div>
-                    {% else %}
-                    <div class="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/40 transition-colors">
-                        <div class="w-8 h-8 rounded border border-border overflow-hidden shrink-0 bg-muted flex items-center justify-center">
-                            <svg class="w-4 h-4 text-muted-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="font-medium truncate text-foreground text-[13px]">{{ res.original_name }}</p>
-                            <p class="text-[10px] text-muted-fg">{{ res.mime_type }} · {{ res.size }}</p>
-                        </div>
-                        <a href="/resources/{{ res.id }}" download class="p-1 rounded text-muted-fg hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Download">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        </a>
-                    </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
         
         {% if tags and tags|length > 0 %}
         <div class="flex flex-wrap gap-1.5 mt-4 border-t border-border pt-3">
