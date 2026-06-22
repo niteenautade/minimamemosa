@@ -428,7 +428,10 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                     </form>
 
                     <!-- Timeline -->
-                    <div id="timeline" class="space-y-1">
+                    <div id="timeline" class="space-y-1"
+                        hx-trigger="memoUpdated from:body"
+                        hx-get="/memos-feed"
+                        hx-swap="innerHTML">
                         {% for group in memo_groups %}
                         <div class="mb-4">
                             <div class="flex items-center gap-2 mb-3">
@@ -783,8 +786,19 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                 editorProps: {
                     attributes: { class: 'focus:outline-none text-base leading-relaxed' },
                     handleDrop: function(view, event, slice, moved) {
-                        if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
-                            return true;
+                        if (event.dataTransfer && event.dataTransfer.items && event.dataTransfer.items.length) {
+                            var files = [];
+                            for (var i = 0; i < event.dataTransfer.items.length; i++) {
+                                if (event.dataTransfer.items[i].kind === 'file') {
+                                    var f = event.dataTransfer.items[i].getAsFile();
+                                    if (f) files.push(f);
+                                }
+                            }
+                            if (files.length) {
+                                uploadFilesForEditor(files);
+                                event.preventDefault();
+                                return true;
+                            }
                         }
                         return false;
                     },
@@ -992,11 +1006,12 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         var formData = new FormData();
         for (var i = 0; i < files.length; i++) formData.append('file', files[i]);
         fetch('/resources', { method: 'POST', body: formData }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.resources) {
-                data.resources.forEach(function(r) { insertContenteditable(r.markdown); });
+            if (data.resources && data.resources.length) {
+                var combined = data.resources.map(function(r) { return r.markdown; }).join('\n\n');
+                insertContenteditable(combined);
                 refreshResourcesPanel();
             }
-        });
+        }).catch(function(err) { console.error('Resource upload failed:', err); });
     }
     var editorAttachments = [];
     function formatBytes(bytes) {
@@ -1159,6 +1174,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             if (r.ok) {
                 var panel = document.getElementById('resources-panel');
                 if (panel && !panel.classList.contains('hidden')) refreshResourcesPanel();
+                htmx.trigger('body', 'memoUpdated');
             }
         });
     }
@@ -1167,9 +1183,10 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         var formData = new FormData();
         for (var i = 0; i < files.length; i++) formData.append('file', files[i]);
         fetch('/resources', { method: 'POST', body: formData }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.resources) {
-                data.resources.forEach(function(r) { 
-                    insertContenteditable(r.markdown);
+            if (data.resources && data.resources.length) {
+                var combined = data.resources.map(function(r) { return r.markdown; }).join('\n\n');
+                insertContenteditable(combined);
+                data.resources.forEach(function(r) {
                     editorAttachments.push({
                         id: r.id,
                         name: r.original_name,
@@ -1181,7 +1198,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                 var panel = document.getElementById('resources-panel');
                 if (panel && !panel.classList.contains('hidden')) refreshResourcesPanel();
             }
-        });
+        }).catch(function(err) { console.error('Resource upload failed:', err); });
     }
     function handleDrop(e) {
         e.preventDefault();
@@ -1189,17 +1206,21 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         var form = document.getElementById('memo-form');
         if (form) form.classList.remove('border-blue-500');
         var files = [];
-        if (e.dataTransfer.files && e.dataTransfer.files.length) {
-            for (var i = 0; i < e.dataTransfer.files.length; i++) {
-                files.push(e.dataTransfer.files[i]);
+        var seen = new Set();
+        function add(f) {
+            if (!f) return;
+            var key = f.name + '|' + f.size + '|' + f.type;
+            if (!seen.has(key)) {
+                seen.add(key);
+                files.push(f);
             }
-        } else if (e.dataTransfer.items && e.dataTransfer.items.length) {
+        }
+        if (e.dataTransfer.files && e.dataTransfer.files.length) {
+            for (var i = 0; i < e.dataTransfer.files.length; i++) add(e.dataTransfer.files[i]);
+        }
+        if (e.dataTransfer.items && e.dataTransfer.items.length) {
             for (var i = 0; i < e.dataTransfer.items.length; i++) {
-                var item = e.dataTransfer.items[i];
-                if (item.kind === 'file') {
-                    var f = item.getAsFile();
-                    if (f) files.push(f);
-                }
+                if (e.dataTransfer.items[i].kind === 'file') add(e.dataTransfer.items[i].getAsFile());
             }
         }
         if (files.length) uploadFilesForEditor(files);
