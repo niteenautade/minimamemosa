@@ -1,0 +1,11 @@
+services:
+  minimamemosa:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-secret}
+      - DATABASE_PATH=/app/data/minimamemosa.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

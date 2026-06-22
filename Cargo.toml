@@ -1,0 +1,28 @@
+[package]
+name = "minimamemosa"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros", "multipart"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+bcrypt = "0.15"
+tower-http = { version = "0.5", features = ["fs"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+minijinja = "1.0"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+chrono = "0.4"
+pulldown-cmark = "0.11"
+captcha = "1.0.0"
+base64 = "0.22.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

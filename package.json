@@ -1,0 +1,18 @@
+{
+  "name": "scrapnotes-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@tiptap/core": "^2.6.6",
+    "@tiptap/starter-kit": "^2.6.6",
+    "@tiptap/extension-placeholder": "^2.6.6",
+    "tiptap-markdown": "^0.8.10",
+    "@tiptap/extension-code-block-lowlight": "^2.6.6",
+    "lowlight": "^3.1.0",
+    "@tiptap/extension-image": "^2.6.6",
+    "@tiptap/extension-link": "^2.6.6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}

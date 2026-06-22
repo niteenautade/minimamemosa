@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<body>
+<div id="memo-editor"></div>
+<script>
+        Promise.all([
+            import('https://esm.sh/@tiptap/core@2.6.6'),
+            import('https://esm.sh/@tiptap/starter-kit@2.6.6'),
+            import('https://esm.sh/@tiptap/extension-placeholder@2.6.6'),
+            import('https://esm.sh/tiptap-markdown@0.8.10?deps=@tiptap/core@2.6.6,@tiptap/pm@2.6.6'),
+        ]).then(function(mod) {
+            var Editor = mod[0].Editor, StarterKit = mod[1].StarterKit || mod[1].default, Placeholder = mod[2].Placeholder || mod[2].default;
+            var Markdown = mod[3].Markdown || mod[3].default;
+            var mountEl = document.getElementById('memo-editor');
+            console.log("Modules loaded");
+            window.tiptapEditor = new Editor({
+                element: document.getElementById('memo-editor'),
+                extensions: [
+                    StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+                    Placeholder.configure({ placeholder: "What's on your mind..." }),
+                    Markdown,
+                ]
+            });
+            console.log("Editor initialized");
+        }).catch(function(e) {
+            console.error('Tiptap CDN load failed:', e);
+        });
+</script>
+</body>
+</html>

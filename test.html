@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body>
+<div id="memo-editor"></div>
+<input id="memo-editor-input" />
+<script src="https://unpkg.com/turndown@7.2.0/dist/turndown.js"></script>
+<script>
+        Promise.all([
+            import('https://cdn.jsdelivr.net/npm/@tiptap/core@2.6.6/+esm'),
+            import('https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.6.6/+esm'),
+            import('https://cdn.jsdelivr.net/npm/@tiptap/extension-placeholder@2.6.6/+esm'),
+        ]).then(function(mod) {
+            console.log("Success", mod);
+        }).catch(function(e) {
+            console.error('Tiptap CDN load failed, using fallback editor', e);
+        });
+</script>
+</body>
+</html>
