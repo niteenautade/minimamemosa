@@ -56,6 +56,37 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
         }
+        var ACCENT_THEMES = {
+            'Default': { l:[75,70,65,60,55,50,45,40,35,30], d:[30,35,40,45,50,55,60,65,70,75] },
+            'Rose':    { l:[350,345,340,335,330,325,320,315,310,305], d:[305,310,315,320,325,330,335,340,345,350] },
+            'Forest':  { l:[140,135,130,125,120,115,110,105,100,95], d:[95,100,105,110,115,120,125,130,135,140] },
+            'Violet':  { l:[280,275,270,265,260,255,250,245,240,235], d:[235,240,245,250,255,260,265,270,275,280] },
+            'Sky':     { l:[200,195,190,185,180,175,170,165,160,155], d:[155,160,165,170,175,180,185,190,195,200] },
+            'Ruby':    { l:[10,5,0,355,350,345,340,335,330,325], d:[325,330,335,340,345,350,355,0,5,10] }
+        };
+        var LIGHT_L = [0.95,0.90,0.82,0.72,0.62,0.55,0.48,0.42,0.35,0.28];
+        var LIGHT_C = [0.025,0.04,0.07,0.09,0.11,0.12,0.13,0.11,0.09,0.07];
+        var DARK_L = [0.18,0.23,0.30,0.40,0.50,0.58,0.66,0.73,0.81,0.89];
+        var DARK_C = [0.015,0.025,0.035,0.05,0.07,0.09,0.10,0.09,0.07,0.05];
+        var ANAMES = ['--a50','--a100','--a200','--a300','--a400','--a500','--a600','--a700','--a800','--a900'];
+        function applyAccentTheme(name, save) {
+            var t = ACCENT_THEMES[name];
+            if (!t) return;
+            var isDark = document.documentElement.classList.contains('dark');
+            var h = isDark ? t.d : t.l;
+            var L = isDark ? DARK_L : LIGHT_L;
+            var C = isDark ? DARK_C : LIGHT_C;
+            for (var i = 0; i < 10; i++) {
+                document.documentElement.style.setProperty(ANAMES[i], 'oklch('+L[i]+' '+C[i]+' '+h[i]+')');
+            }
+            if (save) localStorage.setItem('accent-theme', name);
+        }
+        function loadAccentTheme() {
+            var saved = localStorage.getItem('accent-theme');
+            if (saved && ACCENT_THEMES[saved]) applyAccentTheme(saved, false); else applyAccentTheme('Default', false);
+        }
+        function debounce(fn, ms) { var t; return function() { var ctx=this, args=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(ctx, args) }, ms) } }
+        var debouncedFilterSidebar = debounce(function(q) { filterNotesSidebar(q) }, 80);
         function toggleTheme() {
             document.documentElement.classList.toggle('dark');
             var isDark = document.documentElement.classList.contains('dark');
@@ -404,8 +435,6 @@ function confirmVisPwd() {
     closeVisPwdModal();
 }
 
-function debounce(fn, ms) { var t; return function() { var ctx=this, args=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(ctx, args) }, ms) } }
-var debouncedFilterSidebar = debounce(function(q) { filterNotesSidebar(q) }, 80);
 function filterNotesSidebar(q) {
     var container = document.getElementById('notes-list-container');
     if (!container) return;
@@ -433,37 +462,7 @@ function filterNotesSidebar(q) {
     }
 }
 
-/* ── Accent Themes ── */
-var ACCENT_THEMES = {
-    'Default': { l:[75,70,65,60,55,50,45,40,35,30], d:[30,35,40,45,50,55,60,65,70,75] },
-    'Rose':    { l:[350,345,340,335,330,325,320,315,310,305], d:[305,310,315,320,325,330,335,340,345,350] },
-    'Forest':  { l:[140,135,130,125,120,115,110,105,100,95], d:[95,100,105,110,115,120,125,130,135,140] },
-    'Violet':  { l:[280,275,270,265,260,255,250,245,240,235], d:[235,240,245,250,255,260,265,270,275,280] },
-    'Sky':     { l:[200,195,190,185,180,175,170,165,160,155], d:[155,160,165,170,175,180,185,190,195,200] },
-    'Ruby':    { l:[10,5,0,355,350,345,340,335,330,325], d:[325,330,335,340,345,350,355,0,5,10] }
-};
-var LIGHT_L = [0.95,0.90,0.82,0.72,0.62,0.55,0.48,0.42,0.35,0.28];
-var LIGHT_C = [0.025,0.04,0.07,0.09,0.11,0.12,0.13,0.11,0.09,0.07];
-var DARK_L = [0.18,0.23,0.30,0.40,0.50,0.58,0.66,0.73,0.81,0.89];
-var DARK_C = [0.015,0.025,0.035,0.05,0.07,0.09,0.10,0.09,0.07,0.05];
-var ANAMES = ['--a50','--a100','--a200','--a300','--a400','--a500','--a600','--a700','--a800','--a900'];
-
-function applyAccentTheme(name, save) {
-    var t = ACCENT_THEMES[name];
-    if (!t) return;
-    var isDark = document.documentElement.classList.contains('dark');
-    var h = isDark ? t.d : t.l;
-    var L = isDark ? DARK_L : LIGHT_L;
-    var C = isDark ? DARK_C : LIGHT_C;
-    for (var i = 0; i < 10; i++) {
-        document.documentElement.style.setProperty(ANAMES[i], 'oklch('+L[i]+' '+C[i]+' '+h[i]+')');
-    }
-    if (save) localStorage.setItem('accent-theme', name);
-}
-function loadAccentTheme() {
-    var saved = localStorage.getItem('accent-theme');
-    if (saved && ACCENT_THEMES[saved]) applyAccentTheme(saved, false); else applyAccentTheme('Default', false);
-}
+/* ── Settings Modal ── */
 function openSettings() { document.getElementById('settings-modal').classList.remove('hidden'); renderThemeOptions(); }
 function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
 function themeSwatchHtml(name) {
@@ -720,7 +719,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                       <div class="flex items-center gap-1">
                                            <!-- Emoji Picker -->
                                            <div class="visibility-dropdown relative">
-                                               <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
+                                                <button type="button" onclick="event.stopPropagation(); toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                                </button>
                                                <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-h-[200px] overflow-y-auto">
@@ -728,7 +727,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                </div>
                                            </div>
                                           <div class="relative">
-                                              <button type="button" onclick="togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
+                                               <button type="button" onclick="event.stopPropagation(); togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
                                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                               </button>
                                                <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px]">
@@ -741,7 +740,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                   <button type="button" id="record-audio-btn" onclick="toggleAudioRecording()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                                                       <span>🎤</span><span id="record-label">Record Audio</span>
                                                   </button>
-                                                   <button type="button" onclick="toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
+                                                    <button type="button" onclick="event.stopPropagation(); toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                                                        <span>🔗</span> Link Note
                                                    </button>
                                                </div>
@@ -760,7 +759,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             {% endif %}
         </div>
                                            <div class="visibility-dropdown relative">
-                                               <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-2 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
+                                                <button type="button" onclick="event.stopPropagation(); toggleVisDropdown(this)" class="flex items-center gap-1 px-2 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
                                                    <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                </button>
@@ -1100,6 +1099,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     function insertMemoLink(id, title) { insertContenteditable('['+title+'](/memos/'+id+')'); document.getElementById('link-memo-dropdown').classList.add('hidden'); }
     function closeAllDropdowns() {
         ['emoji-picker','plus-menu','link-memo-dropdown'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+        document.querySelectorAll('.vis-dropdown-menu').forEach(function(el) { el.classList.add('hidden'); });
     }
     function escapeHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
@@ -1377,8 +1377,12 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     function toggleVisDropdown(btn) {
         var menu = btn.parentElement.querySelector('.vis-dropdown-menu');
         if (!menu) return;
-        closeAllDropdowns();
-        menu.classList.toggle('hidden');
+        if (menu.classList.contains('hidden')) {
+            closeAllDropdowns();
+            menu.classList.remove('hidden');
+        } else {
+            menu.classList.add('hidden');
+        }
     }
     function applyVis(dd, btn, vis) {
         dd.querySelectorAll('.vis-dropdown-menu button').forEach(function(b) { b.classList.remove('bg-muted'); });
@@ -1594,6 +1598,18 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         if (dd) updateVisUI(dd);
     })();
     document.addEventListener('click', function() { hideSlashMenu(); });
+    document.addEventListener('click', function(e) {
+        var emoji = document.getElementById('emoji-picker');
+        var plus  = document.getElementById('plus-menu');
+        var link  = document.getElementById('link-memo-dropdown');
+        var visDropdowns = document.querySelectorAll('.vis-dropdown-menu');
+        if (emoji && !emoji.classList.contains('hidden') && !emoji.contains(e.target)) emoji.classList.add('hidden');
+        if (plus  && !plus.classList.contains('hidden')  && !plus.contains(e.target))  plus.classList.add('hidden');
+        if (link  && !link.classList.contains('hidden')  && !link.contains(e.target))  link.classList.add('hidden');
+        visDropdowns.forEach(function(vis) {
+            if (!vis.classList.contains('hidden') && !vis.contains(e.target)) vis.classList.add('hidden');
+        });
+    });
     </script>
 {% endblock %}"##;
 
@@ -2171,7 +2187,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                 </div>
             </div>
             <div class="visibility-dropdown relative edit-vis" data-vis="{{ visibility }}"{% if has_password %} data-has-password="true"{% endif %}>
-                <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
+                <button type="button" onclick="event.stopPropagation(); toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
                     <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
