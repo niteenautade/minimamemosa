@@ -158,6 +158,36 @@ impl Database {
         Ok(memos)
     }
 
+    pub fn get_memos_paginated(&self, user_id: i64, limit: i64, offset: i64) -> rusqlite::Result<Vec<(i64, String, String, String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, title, content, visibility, created_at FROM memos WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3"
+        )?;
+        let rows = stmt.query_map(params![user_id, limit, offset], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+        })?;
+        let mut memos = Vec::new();
+        for row in rows {
+            memos.push(row?);
+        }
+        Ok(memos)
+    }
+
+    pub fn get_resources_paginated(&self, user_id: i64, limit: i64, offset: i64) -> rusqlite::Result<Vec<(i64, String, String, String, i64, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, filename, original_name, mime_type, size, created_at FROM resources WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3"
+        )?;
+        let rows = stmt.query_map(params![user_id, limit, offset], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?))
+        })?;
+        let mut resources = Vec::new();
+        for row in rows {
+            resources.push(row?);
+        }
+        Ok(resources)
+    }
+
     pub fn search_memos(&self, user_id: i64, query: &str) -> rusqlite::Result<Vec<(i64, String, String, String, String)>> {
         let conn = self.conn.lock().unwrap();
         let pattern = format!("%{}%", query);

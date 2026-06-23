@@ -650,13 +650,17 @@ async fn render_app_page(
     };
     let username = user.1.clone();
     let avatar = avatar_char(&username);
-    let memos = state.db.get_memos(user_id).unwrap_or_default();
-    let memo_groups = group_memos_by_date(&state.db, &memos);
+    let limit: i64 = 20;
+    let memos = state.db.get_memos_paginated(user_id, limit + 1, 0).unwrap_or_default();
+    let has_more = memos.len() as i64 > limit;
+    let page_memos: Vec<_> = memos.into_iter().take(limit as usize).collect();
+    let memo_groups = group_memos_by_date(&state.db, &page_memos);
     let mut ctx = json!({
         "username": username,
         "avatar": avatar,
         "memo_groups": memo_groups,
         "active_panel": active_panel,
+        "next_offset": if has_more { Some(limit) } else { None },
     });
     if let Some(note_id) = selected_note_id {
         if let Ok(Some(memo)) = state.db.get_memo_by_id(note_id, user_id) {
@@ -1070,13 +1074,18 @@ async fn delete_resource(
 async fn get_resources_feed(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
         None => return StatusCode::UNAUTHORIZED.into_response(),
     };
-    let resources = state.db.get_resources(user_id).unwrap_or_default();
-    let resource_list: Vec<serde_json::Value> = resources.iter().map(|(id, filename, original_name, mime_type, size, created_at)| {
+    let offset: i64 = params.get("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
+    let limit: i64 = 30;
+    let resources = state.db.get_resources_paginated(user_id, limit + 1, offset).unwrap_or_default();
+    let has_more = resources.len() as i64 > limit;
+    let page: Vec<_> = resources.into_iter().take(limit as usize).collect();
+    let resource_list: Vec<serde_json::Value> = page.iter().map(|(id, filename, original_name, mime_type, size, created_at)| {
         let size_str = if *size < 1024 { format!("{} B", size) }
             else if *size < 1048576 { format!("{:.1} KB", *size as f64 / 1024.0) }
             else { format!("{:.1} MB", *size as f64 / 1048576.0) };
@@ -1091,8 +1100,12 @@ async fn get_resources_feed(
             "created_at": created_at,
         })
     }).collect();
+    let partial = offset > 0;
     state.templates.render("resources_panel", &json!({
         "resources": resource_list,
+        "offset": offset,
+        "next_offset": if has_more { Some(offset + limit) } else { None },
+        "partial": partial,
     })).into_response()
 }
 
@@ -1132,7 +1145,11 @@ async fn get_memo_fragment(
     }
 }
 
-async fn get_notes_panel(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn get_notes_panel(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
         None => return StatusCode::UNAUTHORIZED.into_response(),
@@ -1143,8 +1160,12 @@ async fn get_notes_panel(headers: HeaderMap, State(state): State<Arc<AppState>>)
     };
     let username = user.1;
     let avatar = avatar_char(&username);
-    let memos = state.db.get_sidebar_memos(user_id, 100).unwrap_or_default();
-    let notes: Vec<serde_json::Value> = memos.iter().map(|(id, _title, content, visibility, created_at)| {
+    let offset: i64 = params.get("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
+    let limit: i64 = 30;
+    let memos = state.db.get_memos_paginated(user_id, limit + 1, offset).unwrap_or_default();
+    let has_more = memos.len() as i64 > limit;
+    let page_memos: Vec<_> = memos.into_iter().take(limit as usize).collect();
+    let notes: Vec<serde_json::Value> = page_memos.iter().map(|(id, _title, content, visibility, created_at)| {
         let (title, _) = extract_title(content);
         let tags = extract_tags(content);
         let first_image_id = extract_first_image_id(content);
@@ -1161,10 +1182,14 @@ async fn get_notes_panel(headers: HeaderMap, State(state): State<Arc<AppState>>)
             "visibility": visibility,
         })
     }).collect();
+    let partial = offset > 0;
     state.templates.render("notes_panel", &json!({
         "notes": notes,
         "username": username,
         "avatar": avatar,
+        "offset": offset,
+        "next_offset": if has_more { Some(offset + limit) } else { None },
+        "partial": partial,
     })).into_response()
 }
 
@@ -1215,6 +1240,7 @@ async fn get_memo_edit_form(
 async fn get_memos_feed(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
@@ -1225,12 +1251,18 @@ async fn get_memos_feed(
         _ => return StatusCode::UNAUTHORIZED.into_response(),
     };
     let avatar = avatar_char(&user.1);
-    let memos = state.db.get_memos(user_id).unwrap_or_default();
-    let memo_groups = group_memos_by_date(&state.db, &memos);
+    let offset: i64 = params.get("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
+    let limit: i64 = 20;
+    let memos = state.db.get_memos_paginated(user_id, limit + 1, offset).unwrap_or_default();
+    let has_more = memos.len() as i64 > limit;
+    let page_memos: Vec<_> = memos.into_iter().take(limit as usize).collect();
+    let memo_groups = group_memos_by_date(&state.db, &page_memos);
     state.templates.render("memos_feed", &json!({
         "memo_groups": memo_groups,
         "username": user.1,
         "avatar": avatar,
+        "offset": offset,
+        "next_offset": if has_more { Some(offset + limit) } else { None },
     })).into_response()
 }
 

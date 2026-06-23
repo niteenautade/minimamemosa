@@ -342,7 +342,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <div id="resources-panel"
         class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full {% if active_panel == 'resources' %}{% else %}hidden{% endif %}"
         hx-trigger="load once"
-        hx-get="/resources-feed"
+        hx-get="/resources-feed?offset=0"
         hx-swap="innerHTML">
     </div>
 
@@ -375,9 +375,10 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                        <div id="attachment-preview-container" class="border border-border rounded-xl bg-card overflow-hidden hidden">
                                           <div id="attachment-preview-list" class="flex flex-col"></div>
                                       </div>
-                                      <input type="hidden" name="content" id="memo-editor-input" value="">
-                                  </div>
-                                  <!-- Slash Commands Dropdown -->
+                                       <input type="hidden" name="content" id="memo-editor-input" value="">
+                                       <p class="text-[10px] text-[#8e8e8a] text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[9px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
+                                   </div>
+                                   <!-- Slash Commands Dropdown -->
                                    <div id="slash-menu" class="hidden bg-card border border-border rounded-lg shadow-lg py-1 min-w-[260px] z-50"></div>
                                    <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
@@ -442,11 +443,6 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
                     <!-- Timeline -->
                     <div id="timeline" class="space-y-1"
-                        {% if active_panel != 'notes' %}
-                        hx-trigger="memoUpdated from:body"
-                        {% endif %}
-                        hx-get="/memos-feed"
-                        hx-swap="innerHTML"
                         {% if selected_note %}data-active-note-id="{{ selected_note.id }}"{% endif %}>
                         {% if active_panel == 'notes' and selected_note %}
                             {% set id = selected_note.id %}
@@ -483,6 +479,12 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                             </div>
                         </div>
                         {% endfor %}
+                        {% if next_offset %}
+                        <div id="sentinel-memos-0" class="h-4"
+                             hx-get="/memos-feed?offset={{ next_offset }}"
+                             hx-trigger="revealed"
+                             hx-swap="outerHTML"></div>
+                        {% endif %}
                         {% if not memo_groups %}
                         <div class="text-center py-16">
                             <p class="text-muted-fg text-sm">No memos yet. Write your first memo above!</p>
@@ -1321,7 +1323,13 @@ const MEMOS_FEED_TEMPLATE: &str = r##"{% for group in memo_groups %}
     </div>
 </div>
 {% endfor %}
-{% if not memo_groups %}
+{% if next_offset %}
+<div id="sentinel-memos-{{ offset }}" class="h-4"
+     hx-get="/memos-feed?offset={{ next_offset }}"
+     hx-trigger="revealed"
+     hx-swap="outerHTML"></div>
+{% endif %}
+{% if not memo_groups and offset == 0 %}
 <div class="text-center py-16">
     <p class="text-muted-fg text-sm">No memos found</p>
 </div>
@@ -1397,7 +1405,43 @@ const SHARE_PASSWORD_TEMPLATE: &str = r##"{% extends "base" %}
 </div>
 {% endblock %}"##;
 
-const NOTES_PANEL_TEMPLATE: &str = r#"<div class="flex flex-col h-full">
+const NOTES_PANEL_TEMPLATE: &str = r#"{% if partial %}
+{% for note in notes %}
+<div data-note-id="{{ note.id }}" onclick="openNote({{ note.id }})"
+    class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30">
+    <div class="flex-1 min-w-0">
+        <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
+            {{ note.title }}
+            {% if note.visibility == 'public' %}
+            <svg class="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            {% elif note.visibility == 'protected' %}
+            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
+            {% endif %}
+        </p>
+        <p class="text-[10px] text-muted-fg mt-0.5">{{ note.created_at }}</p>
+        {% if note.tags %}
+        <div class="flex flex-wrap gap-1 mt-1.5">
+            {% for tag in note.tags %}
+            <span class="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">#{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% if note.first_image_id %}
+    <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
+        <img src="/resources/{{ note.first_image_id }}" class="w-full h-full object-cover" loading="lazy">
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% if next_offset %}
+<div id="sentinel-notes-{{ offset }}" class="h-4"
+     hx-get="/notes-panel?offset={{ next_offset }}"
+     hx-trigger="revealed"
+     hx-swap="outerHTML"></div>
+{% endif %}
+{% else %}
+<div class="flex flex-col h-full">
     <div class="px-4 py-3 border-b border-border flex-shrink-0">
         <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">Notes</h2>
     </div>
@@ -1405,7 +1449,7 @@ const NOTES_PANEL_TEMPLATE: &str = r#"<div class="flex flex-col h-full">
         {% if notes %}
             {% for note in notes %}
             <div data-note-id="{{ note.id }}" onclick="openNote({{ note.id }})"
-                class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30 last:border-0">
+                class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30">
                 <div class="flex-1 min-w-0">
                     <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
                         {{ note.title }}
@@ -1419,9 +1463,7 @@ const NOTES_PANEL_TEMPLATE: &str = r#"<div class="flex flex-col h-full">
                     {% if note.tags %}
                     <div class="flex flex-wrap gap-1 mt-1.5">
                         {% for tag in note.tags %}
-                        <span class="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
-                            #{{ tag }}
-                        </span>
+                        <span class="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">#{{ tag }}</span>
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -1436,8 +1478,15 @@ const NOTES_PANEL_TEMPLATE: &str = r#"<div class="flex flex-col h-full">
         {% else %}
             <p class="text-sm text-gray-400 p-3 text-center">No notes yet</p>
         {% endif %}
+        {% if next_offset %}
+        <div id="sentinel-notes-{{ offset }}" class="h-4"
+             hx-get="/notes-panel?offset={{ next_offset }}"
+             hx-trigger="revealed"
+             hx-swap="outerHTML"></div>
+        {% endif %}
     </div>
-</div>"#;
+</div>
+{% endif %}"#;
 
 const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
     <a href="/app/timeline"
@@ -1516,6 +1565,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             <div id="attachment-preview-list" class="flex flex-col"></div>
         </div>
         <input type="hidden" name="content" id="memo-edit-input-{{ id }}" value="{{ content|e }}">
+        <p class="text-[10px] text-[#8e8e8a] text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[9px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
     </div>
     <script>
     (function() {
@@ -1769,7 +1819,41 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
     </div>
 </form>"##;
 
-const RESOURCES_PANEL_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
+const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
+{% for res in resources %}
+<div class="flex items-center gap-1.5 p-2 rounded-lg hover:bg-muted transition-colors group/res">
+    <input type="checkbox" class="res-checkbox rounded border-border/60" value="{{ res.id }}" onchange="updateBulkActions()">
+    {% if res.is_image %}
+    <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
+        <img src="/resources/{{ res.id }}" class="w-full h-full object-cover" loading="lazy">
+    </div>
+    {% else %}
+    <div class="w-10 h-10 rounded-lg flex-shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045] flex items-center justify-center">
+        <svg class="w-5 h-5 text-[#8e8e8a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+    </div>
+    {% endif %}
+    <div class="flex-1 min-w-0 cursor-pointer" onclick="insertContenteditable('{% if res.is_image %}![{{ res.original_name }}](/resources/{{ res.id }}){% else %}[{{ res.original_name }}](/resources/{{ res.id }}){% endif %}')">
+        <p class="text-xs font-medium text-foreground truncate">{{ res.original_name }}</p>
+        <p class="text-[10px] text-[#8e8e8a]">{{ res.size_str }}</p>
+    </div>
+    <button onclick="if(confirm('Delete this resource?')){var e=this;fetch('/resources/{{ res.id }}',{method:'DELETE'}).then(function(r){if(r.ok){e.closest('.group\\/res').remove();refreshResourcesPanel();htmx.trigger('body','memoUpdated')}})}"
+        class="p-1 rounded-md text-[#8e8e8a] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+    </button>
+</div>
+{% endfor %}
+{% if next_offset %}
+<div id="sentinel-res-{{ offset }}" class="h-4"
+     hx-get="/resources-feed?offset={{ next_offset }}"
+     hx-trigger="revealed"
+     hx-swap="outerHTML"></div>
+{% endif %}
+{% else %}
+<div class="flex flex-col h-full">
     <div class="px-4 py-3 border-b border-border flex-shrink-0">
         <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">Resources</h2>
     </div>
@@ -1823,9 +1907,15 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
         {% else %}
             <p class="text-xs text-muted-fg text-center py-10">No resources yet.<br>Drag & drop files into the editor or click Upload.</p>
         {% endif %}
+        {% if next_offset %}
+        <div id="sentinel-res-{{ offset }}" class="h-4"
+             hx-get="/resources-feed?offset={{ next_offset }}"
+             hx-trigger="revealed"
+             hx-swap="outerHTML"></div>
+        {% endif %}
     </div>
-    </div>
-</div>"##;
+</div>
+{% endif %}"##;
 
 pub struct Templates {
     env: Environment<'static>,
