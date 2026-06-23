@@ -63,14 +63,18 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
             document.getElementById('hljs-theme').href = isDark 
                 ? "/static/github-dark-dimmed.min.css" 
                 : "/static/github.min.css";
+            var saved = localStorage.getItem('accent-theme');
+            if (saved && ACCENT_THEMES[saved]) applyAccentTheme(saved, false); else applyAccentTheme('Default', false);
         }
         document.addEventListener("DOMContentLoaded", () => {
             var isDark = document.documentElement.classList.contains('dark');
             document.getElementById('hljs-theme').href = isDark 
                 ? "/static/github-dark-dimmed.min.css" 
                 : "/static/github.min.css";
+            loadAccentTheme();
         });
         document.addEventListener('htmx:afterSwap', function(evt) {
+            loadAccentTheme();
             document.querySelectorAll('pre code').forEach((block) => {
                 hljs.highlightElement(block);
             });
@@ -286,6 +290,24 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
     </div>
 </div>
 
+<!-- Settings Modal -->
+<div id="settings-modal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden" style="background:rgba(0,0,0,0.5)">
+    <div class="bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-sm mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-foreground">Settings</h3>
+            <button onclick="closeSettings()" class="p-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <p class="text-xs text-muted-fg mb-3">Choose an accent color theme</p>
+        <div id="settings-theme-list" class="space-y-1"></div>
+        <div class="flex gap-2 mt-4">
+            <button onclick="closeSettings()" class="flex-1 px-3 py-2 text-sm font-medium text-muted-fg hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors">Cancel</button>
+            <button onclick="saveTheme()" class="flex-1 px-3 py-2 text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 rounded-lg transition-colors">Save</button>
+        </div>
+    </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 opacity-0 translate-y-2 hidden">
 </div>
@@ -409,6 +431,79 @@ function filterNotesSidebar(q) {
         var msg = container.querySelector('.sidebar-empty-msg');
         if (msg) msg.remove();
     }
+}
+
+/* ── Accent Themes ── */
+var ACCENT_THEMES = {
+    'Default': { l:[75,70,65,60,55,50,45,40,35,30], d:[30,35,40,45,50,55,60,65,70,75] },
+    'Rose':    { l:[350,345,340,335,330,325,320,315,310,305], d:[305,310,315,320,325,330,335,340,345,350] },
+    'Forest':  { l:[140,135,130,125,120,115,110,105,100,95], d:[95,100,105,110,115,120,125,130,135,140] },
+    'Violet':  { l:[280,275,270,265,260,255,250,245,240,235], d:[235,240,245,250,255,260,265,270,275,280] },
+    'Sky':     { l:[200,195,190,185,180,175,170,165,160,155], d:[155,160,165,170,175,180,185,190,195,200] },
+    'Ruby':    { l:[10,5,0,355,350,345,340,335,330,325], d:[325,330,335,340,345,350,355,0,5,10] }
+};
+var LIGHT_L = [0.95,0.90,0.82,0.72,0.62,0.55,0.48,0.42,0.35,0.28];
+var LIGHT_C = [0.025,0.04,0.07,0.09,0.11,0.12,0.13,0.11,0.09,0.07];
+var DARK_L = [0.18,0.23,0.30,0.40,0.50,0.58,0.66,0.73,0.81,0.89];
+var DARK_C = [0.015,0.025,0.035,0.05,0.07,0.09,0.10,0.09,0.07,0.05];
+var ANAMES = ['--a50','--a100','--a200','--a300','--a400','--a500','--a600','--a700','--a800','--a900'];
+
+function applyAccentTheme(name, save) {
+    var t = ACCENT_THEMES[name];
+    if (!t) return;
+    var isDark = document.documentElement.classList.contains('dark');
+    var h = isDark ? t.d : t.l;
+    var L = isDark ? DARK_L : LIGHT_L;
+    var C = isDark ? DARK_C : LIGHT_C;
+    for (var i = 0; i < 10; i++) {
+        document.documentElement.style.setProperty(ANAMES[i], 'oklch('+L[i]+' '+C[i]+' '+h[i]+')');
+    }
+    if (save) localStorage.setItem('accent-theme', name);
+}
+function loadAccentTheme() {
+    var saved = localStorage.getItem('accent-theme');
+    if (saved && ACCENT_THEMES[saved]) applyAccentTheme(saved, false); else applyAccentTheme('Default', false);
+}
+function openSettings() { document.getElementById('settings-modal').classList.remove('hidden'); renderThemeOptions(); }
+function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
+function themeSwatchHtml(name) {
+    var t = ACCENT_THEMES[name];
+    if (!t) return '';
+    var h = t.l;
+    var html = '';
+    for (var i = 0; i < 10; i++) {
+        var c = 'oklch('+LIGHT_L[i]+' '+LIGHT_C[i]+' '+h[i]+')';
+        html += '<div style="background:'+c+'" class="w-4 h-4 rounded-sm"></div>';
+    }
+    return html;
+}
+var _selectedTheme = null;
+function selectTheme(name) {
+    _selectedTheme = name;
+    document.querySelectorAll('#settings-theme-list > div').forEach(function(el) {
+        el.classList.remove('ring-2', 'ring-accent-500');
+    });
+    var el = document.querySelector('#settings-theme-list [data-theme="'+name+'"]');
+    if (el) el.classList.add('ring-2', 'ring-accent-500');
+}
+function saveTheme() {
+    if (_selectedTheme) { applyAccentTheme(_selectedTheme, true); showToast('Theme saved!', 'success'); }
+    closeSettings();
+}
+function renderThemeOptions() {
+    var container = document.getElementById('settings-theme-list');
+    if (!container) return;
+    var saved = localStorage.getItem('accent-theme') || 'Default';
+    container.innerHTML = '';
+    Object.keys(ACCENT_THEMES).forEach(function(name) {
+        var div = document.createElement('div');
+        div.className = 'flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-muted transition-colors ' + (name === saved ? 'ring-2 ring-accent-500' : '');
+        div.setAttribute('data-theme', name);
+        div.onclick = function(){ selectTheme(name) };
+        div.innerHTML = '<div class="flex gap-0.5">'+themeSwatchHtml(name)+'</div><span class="text-sm text-foreground">'+name+'</span>';
+        container.appendChild(div);
+    });
+    _selectedTheme = saved;
 }
 </script>
 </body>
@@ -545,6 +640,15 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
         </a>
+        <div class="flex-1"></div>
+        <button onclick="openSettings()"
+            class="p-2.5 rounded-xl text-muted-fg hover:bg-muted hover:text-foreground transition-colors"
+            title="Settings">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+        </button>
     </div>
 
     <!-- Sidebar Panel (timeline view - search + calendar) -->
