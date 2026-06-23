@@ -206,26 +206,17 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
             </div>
             <h3 class="text-lg font-semibold text-foreground" id="share-modal-title">Share Note</h3>
-            <p class="text-xs text-muted-fg mt-1" id="share-modal-desc">Set a password for others to view this note.</p>
+            <p class="text-xs text-muted-fg mt-1" id="share-modal-desc">Copy the link below to share this note.</p>
         </div>
         <div class="space-y-3">
-            <div>
-                <label for="share-password" class="block text-sm font-medium mb-1">Password</label>
-                <input type="password" id="share-password" placeholder="Enter a password..."
-                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <div class="flex items-center gap-2 p-2 bg-muted rounded-lg border border-border">
+                <span class="text-xs text-muted-fg truncate" id="share-link-display"></span>
+                <button onclick="copyShareLink()" class="ml-auto shrink-0 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors">Copy</button>
             </div>
-            <div>
-                <label for="share-password-confirm" class="block text-sm font-medium mb-1">Confirm Password</label>
-                <input type="password" id="share-password-confirm" placeholder="Confirm password..."
-                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-            </div>
-            <p id="share-error" class="text-red-500 text-xs hidden"></p>
         </div>
-        <div class="flex gap-2 mt-4">
+        <div class="flex mt-4">
             <button onclick="closeShareModal()"
-                class="flex-1 px-3 py-2 text-sm font-medium text-muted-fg hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors">Cancel</button>
-            <button id="share-submit-btn" onclick="submitSharePassword()"
-                class="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Set Password &amp; Copy Link</button>
+                class="w-full px-3 py-2 text-sm font-medium text-muted-fg hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors">Close</button>
         </div>
     </div>
 </div>
@@ -289,23 +280,13 @@ var shareNoteId = null;
 
 function shareNote(id, visibility) {
     shareNoteId = id;
-    if (visibility === 'public') {
+    if (visibility === 'public' || visibility === 'protected') {
         var url = window.location.origin + '/share/' + id;
         navigator.clipboard.writeText(url).then(function() {
             showToast('Share link copied to clipboard!', 'success');
         }).catch(function() {
             showToast('Failed to copy link', 'error');
         });
-    } else if (visibility === 'protected') {
-        document.getElementById('share-modal-title').textContent = 'Share Protected Note';
-        document.getElementById('share-modal-desc').textContent = 'Set or update the password for others to view this note.';
-        document.getElementById('share-password').value = '';
-        document.getElementById('share-password-confirm').value = '';
-        document.getElementById('share-error').classList.add('hidden');
-        document.getElementById('share-submit-btn').disabled = false;
-        document.getElementById('share-submit-btn').textContent = 'Set Password & Copy Link';
-        document.getElementById('share-modal').classList.remove('hidden');
-        document.getElementById('share-password').focus();
     } else {
         showToast('Set visibility to Public or Protected in edit to share', 'error');
     }
@@ -316,44 +297,13 @@ function closeShareModal() {
     shareNoteId = null;
 }
 
-function submitSharePassword() {
-    var pwd = document.getElementById('share-password').value;
-    var confirm = document.getElementById('share-password-confirm').value;
-    var errEl = document.getElementById('share-error');
-    var btn = document.getElementById('share-submit-btn');
-    if (!pwd || pwd.length < 4) {
-        errEl.textContent = 'Password must be at least 4 characters';
-        errEl.classList.remove('hidden');
-        return;
-    }
-    if (pwd !== confirm) {
-        errEl.textContent = 'Passwords do not match';
-        errEl.classList.remove('hidden');
-        return;
-    }
-    errEl.classList.add('hidden');
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
-    fetch('/notes/' + shareNoteId + '/share', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd })
-    }).then(function(r) {
-        if (!r.ok) { throw new Error('Failed to save password'); }
-        return r.json();
-    }).then(function(data) {
-        closeShareModal();
-        var url = window.location.origin + '/share/' + shareNoteId;
-        navigator.clipboard.writeText(url).then(function() {
-            showToast('Share link copied to clipboard!', 'success');
-        }).catch(function() {
-            showToast('Share link: ' + url, '');
-        });
-    }).catch(function(e) {
-        btn.disabled = false;
-        btn.textContent = 'Set Password & Copy Link';
-        errEl.textContent = 'Failed to save password. Try again.';
-        errEl.classList.remove('hidden');
+function copyShareLink() {
+    var url = window.location.origin + '/share/' + shareNoteId;
+    closeShareModal();
+    navigator.clipboard.writeText(url).then(function() {
+        showToast('Share link copied to clipboard!', 'success');
+    }).catch(function() {
+        showToast('Share link: ' + url, '');
     });
 }
 
@@ -629,12 +579,15 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                   <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <div class="flex items-center justify-between px-8 py-3 border-t border-border bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
                                       <div class="flex items-center gap-1">
-                                          <!-- Emoji Picker -->
-                                          <div class="relative">
-                                              <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
-                                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                              </button>
-                                          </div>
+                                           <!-- Emoji Picker -->
+                                           <div class="visibility-dropdown relative">
+                                               <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
+                                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                               </button>
+                                               <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-h-[200px] overflow-y-auto">
+                                                   <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
+                                               </div>
+                                           </div>
                                           <div class="relative">
                                               <button type="button" onclick="togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
                                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -649,16 +602,29 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                   <button type="button" id="record-audio-btn" onclick="toggleAudioRecording()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                                                       <span>🎤</span><span id="record-label">Record Audio</span>
                                                   </button>
-                                                  <button type="button" onclick="toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                                                      <span>🔗</span> Link Memo
-                                                  </button>
-                                              </div>
-                                          </div>
-                                          <div class="relative">
-                                              <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-2 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
-                                                  <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
-                                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                              </button>
+                                                   <button type="button" onclick="toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
+                                                       <span>🔗</span> Link Memo
+                                                   </button>
+                                               </div>
+                                               <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
+                                                   <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search memos..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
+                                                   <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
+                                               </div>
+            {% if has_password %}
+            <div class="px-4 pb-2">
+                <div class="border border-dashed border-border rounded-lg p-3">
+                    <p class="text-xs text-muted-fg mb-2">This note is password-protected.</p>
+                    <button type="button" onclick="showVisPwdModal(true)"
+                        class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">Change Password</button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+                                           <div class="visibility-dropdown relative">
+                                               <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-2 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
+                                                   <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
+                                                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                               </button>
                                               <div class="vis-dropdown-menu hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px] z-50">
                                                   <button type="button" data-vis-value="public" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                                                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -993,7 +959,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     }
     function insertMemoLink(id, title) { insertContenteditable('['+title+'](/memos/'+id+')'); document.getElementById('link-memo-dropdown').classList.add('hidden'); }
     function closeAllDropdowns() {
-        ['emoji-picker','plus-menu','link-memo-dropdown'].forEach(function(id) { document.getElementById(id).classList.add('hidden'); });
+        ['emoji-picker','plus-menu','link-memo-dropdown'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); });
     }
     function escapeHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
@@ -2103,6 +2069,16 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             </button>
         </div>
     </div>
+    {% if has_password %}
+    <div class="px-4 pb-2 -mt-1">
+        <div class="border border-dashed border-border rounded-lg p-3">
+            <p class="text-xs text-muted-fg mb-2">This note is password-protected.</p>
+            <button type="button" onclick="showVisPwdModal(true)"
+                class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">Change Password</button>
+        </div>
+    </div>
+    {% endif %}
+</div>
 </form>"##;
 
 const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
