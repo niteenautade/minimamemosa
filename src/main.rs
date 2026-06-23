@@ -126,11 +126,36 @@ fn extract_first_image_id(content: &str) -> Option<i64> {
     None
 }
 
+fn strip_html(s: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    let mut tag_buf = String::new();
+    for c in s.chars() {
+        match c {
+            '<' => { in_tag = true; tag_buf.clear(); }
+            '>' => {
+                in_tag = false;
+                let t = tag_buf.trim();
+                if t == "p" || t == "/p" || t == "br" || t == "/div" || t.starts_with("br ") || t.starts_with("/h") || t.starts_with("h") {
+                    out.push('\n');
+                }
+            }
+            _ => {
+                if in_tag { tag_buf.push(c); }
+                else { out.push(c); }
+            }
+        }
+    }
+    out
+}
+
 fn extract_title(content: &str) -> (String, String) {
     let trimmed = content.trim();
-    let raw_title = trimmed.lines().next().unwrap_or("").to_string();
-    let clean = raw_title.trim_start_matches(|c| c == '#' || c == ' ' || c == '*' || c == '_').to_string();
-    (clean, trimmed.to_string())
+    let text = strip_html(trimmed);
+    let first_line = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim().to_string();
+    let clean = first_line.trim_start_matches(|c| c == '#' || c == ' ' || c == '*' || c == '_').trim().to_string();
+    let final_title = if clean.is_empty() { "Note".to_string() } else { clean };
+    (final_title, trimmed.to_string())
 }
 
 fn extract_tags(content: &str) -> Vec<String> {
@@ -617,20 +642,44 @@ async fn render_app_page(
     user_id: i64,
     state: &Arc<AppState>,
     active_panel: &str,
+    selected_note_id: Option<i64>,
 ) -> Response<Body> {
     let user = match state.db.get_user_by_id(user_id) {
         Ok(Some(u)) => u,
         _ => return Redirect::to("/login").into_response(),
     };
-    let avatar = avatar_char(&user.1);
+    let username = user.1.clone();
+    let avatar = avatar_char(&username);
     let memos = state.db.get_memos(user_id).unwrap_or_default();
     let memo_groups = group_memos_by_date(&state.db, &memos);
-    state.templates.render("timeline", &json!({
-        "username": user.1,
+    let mut ctx = json!({
+        "username": username,
         "avatar": avatar,
         "memo_groups": memo_groups,
         "active_panel": active_panel,
-    })).into_response()
+    });
+    if let Some(note_id) = selected_note_id {
+        if let Ok(Some(memo)) = state.db.get_memo_by_id(note_id, user_id) {
+            let (id, title, content, visibility, created_at) = memo;
+            let (cleaned_content, resources) = process_memo_content(&state.db, &content);
+            let content_html = render_markdown(&cleaned_content);
+            let created_at_relative = relative_time(&created_at);
+            let tags = state.db.get_memo_tags(id).unwrap_or_default();
+            ctx["selected_note"] = json!({
+                "id": id,
+                "title": title,
+                "content": content,
+                "content_html": content_html,
+                "visibility": visibility,
+                "created_at": created_at,
+                "created_at_relative": created_at_relative,
+                "tags": tags,
+                "resources": resources,
+                "username": username,
+            });
+        }
+    }
+    state.templates.render("timeline", &ctx).into_response()
 }
 
 async fn get_app_root(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -638,7 +687,7 @@ async fn get_app_root(headers: HeaderMap, State(state): State<Arc<AppState>>) ->
         Some(id) => id,
         None => return Redirect::to("/login").into_response(),
     };
-    render_app_page(user_id, &state, "timeline").await
+    render_app_page(user_id, &state, "timeline", None).await
 }
 
 async fn get_app_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -646,7 +695,7 @@ async fn get_app_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>
         Some(id) => id,
         None => return Redirect::to("/login").into_response(),
     };
-    render_app_page(user_id, &state, "timeline").await
+    render_app_page(user_id, &state, "timeline", None).await
 }
 
 async fn get_app_notes(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -654,7 +703,9 @@ async fn get_app_notes(headers: HeaderMap, State(state): State<Arc<AppState>>) -
         Some(id) => id,
         None => return Redirect::to("/login").into_response(),
     };
-    render_app_page(user_id, &state, "notes").await
+    let sidebar_memos = state.db.get_sidebar_memos(user_id, 1).unwrap_or_default();
+    let first_note_id = sidebar_memos.first().map(|(id, _, _, _, _)| *id);
+    render_app_page(user_id, &state, "notes", first_note_id).await
 }
 
 async fn get_app_resources(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -662,7 +713,7 @@ async fn get_app_resources(headers: HeaderMap, State(state): State<Arc<AppState>
         Some(id) => id,
         None => return Redirect::to("/login").into_response(),
     };
-    render_app_page(user_id, &state, "resources").await
+    render_app_page(user_id, &state, "resources", None).await
 }
 
 async fn post_memos(
@@ -1045,6 +1096,42 @@ async fn get_resources_feed(
     })).into_response()
 }
 
+async fn get_memo_fragment(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let user = match state.db.get_user_by_id(user_id) {
+        Ok(Some(u)) => u,
+        _ => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let username = user.1;
+    match state.db.get_memo_by_id(id, user_id) {
+        Ok(Some((_id, _title, content, visibility, created_at))) => {
+            let (cleaned_content, resources) = process_memo_content(&state.db, &content);
+            let content_html = render_markdown(&cleaned_content);
+            let created_at_relative = relative_time(&created_at);
+            let tags = state.db.get_memo_tags(id).unwrap_or_default();
+            state.templates.render("memo_fragment", &json!({
+                "id": id,
+                "content": content,
+                "content_html": content_html,
+                "visibility": visibility,
+                "created_at": created_at,
+                "created_at_relative": created_at_relative,
+                "resources": resources,
+                "tags": tags,
+                "username": username,
+            })).into_response()
+        }
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 async fn get_notes_panel(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
@@ -1254,6 +1341,7 @@ async fn main() {
         .route("/resources-feed", get(get_resources_feed))
         .route("/notes-panel", get(get_notes_panel))
         .route("/note/:id", get(get_note_detail))
+        .route("/memos/:id/fragment", get(get_memo_fragment))
         .route("/memos-feed", get(get_memos_feed))
         .route("/search", get(get_search))
         .route("/memos-json", get(get_memos_json))

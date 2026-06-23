@@ -114,7 +114,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .memo-content table { border-collapse: collapse; margin-bottom: 0.5rem; width: 100%; }
         .memo-content th, .memo-content td { border: 1px solid var(--border); padding: 0.375rem 0.75rem; text-align: left; }
         .memo-content th { background: var(--muted); font-weight: 600; }
-        .memo-content img { max-width: 100%; max-height: 256px; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .memo-content img { max-width: 100%; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
         .memo-content ul.task-list { list-style: none; padding-left: 0; }
         .memo-content li.task-list-item { display: flex; align-items: flex-start; gap: 0.375rem; }
         .memo-content li.task-list-item input[type="checkbox"] { margin-top: 0.25rem; }
@@ -145,6 +145,11 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .tiptap-editor .ProseMirror ul, .tiptap-editor .ProseMirror ol { padding-left: 1.25rem; margin: 0.25rem 0; }
         .tiptap-editor .ProseMirror li { list-style: disc; }
         .tiptap-editor .ProseMirror ol li { list-style: decimal; }
+        .tiptap-editor .ProseMirror ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+        .tiptap-editor .ProseMirror ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.375rem; list-style: none; }
+        .tiptap-editor .ProseMirror ul[data-type="taskList"] li > label { display: flex; align-items: flex-start; gap: 0.375rem; flex: 1; cursor: pointer; }
+        .tiptap-editor .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] { margin-top: 0.3rem; cursor: pointer; }
+        .tiptap-editor .ProseMirror ul[data-type="taskList"] li > label p { margin: 0; flex: 1; }
         .tiptap-editor .ProseMirror code { background: var(--muted); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.875rem; }
         .tiptap-editor .ProseMirror pre { background: var(--muted); padding: 0.5rem; border-radius: 0.375rem; margin: 0.25rem 0; }
         .tiptap-editor .ProseMirror pre code { background: none; padding: 0; }
@@ -155,7 +160,9 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .tiptap-editor .ProseMirror table { border-collapse: collapse; margin: 0.25rem 0; width: 100%; }
         .tiptap-editor .ProseMirror th, .tiptap-editor .ProseMirror td { border: 1px solid var(--border); padding: 0.25rem 0.5rem; text-align: left; }
         .tiptap-editor .ProseMirror th { background: var(--muted); font-weight: 600; }
-        .tiptap-editor .ProseMirror img { max-width: 100%; max-height: 256px; height: auto; object-fit: contain; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .tiptap-editor .ProseMirror img { max-width: 100%; height: auto; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; }
+        #image-resize-menu { background: var(--card); border: 1px solid var(--border); border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; }
+        #image-resize-menu button:hover { background: var(--muted); }
         .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted-fg); pointer-events: none; float: left; height: 0; }
         .tiptap-editor[data-empty="true"]:not(:has(.ProseMirror)):before { content: attr(data-placeholder); color: var(--muted-fg); pointer-events: none; }
         * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-fg) 45%, transparent) transparent; }
@@ -168,6 +175,11 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
 <div id="image-modal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden" onclick="closeImageModal()">
     <button class="absolute top-4 right-4 text-white/70 hover:text-white text-2xl leading-none w-10 h-10 flex items-center justify-center rounded-full bg-black/20 hover:bg-black/40 transition-colors">&times;</button>
     <img src="" alt="Fullscreen image" class="object-contain rounded-lg shadow-2xl" onclick="event.stopPropagation()">
+</div>
+<div id="image-resize-menu" class="hidden fixed min-w-[130px] py-1" onclick="event.stopPropagation()">
+    <button type="button" onclick="setImageWidth('25%')" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">Quarter Width</button>
+    <button type="button" onclick="setImageWidth('50%')" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">Half Width</button>
+    <button type="button" onclick="setImageWidth('100%')" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">Full Width</button>
 </div>
 </body>
 </html>"#;
@@ -246,8 +258,33 @@ const REGISTER_TEMPLATE: &str = r#"{% extends "base" %}
 
 const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 {% block content %}
-<div class="flex h-screen overflow-hidden">
-    <!-- Icon Bar -->
+<div class="flex flex-col h-screen overflow-hidden">
+    <!-- Header -->
+    <header class="flex items-center justify-between px-6 py-2.5 border-b border-border bg-white dark:bg-gray-900 flex-shrink-0 w-full">
+        <div class="flex items-center gap-3">
+            <span class="text-sm font-semibold text-card-fg">MinimaMemosa</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="toggleTheme()"
+                class="p-1.5 rounded-lg hover:bg-muted text-muted-fg transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                </svg>
+            </button>
+            <div class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted cursor-pointer">
+                <div class="avatar-initials avatar-initials-sm bg-blue-500 text-white">{{ avatar }}</div>
+                <span class="text-sm text-card-fg">{{ username }}</span>
+            </div>
+            <a href="/logout" class="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1" title="Logout">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+            </a>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Icon Bar -->
     <div class="w-14 flex-shrink-0 bg-card border-r border-border flex flex-col items-center py-3 gap-2 z-20">
         <a id="icon-timeline"
             href="/app/timeline"
@@ -283,7 +320,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <!-- Sidebar Panel (timeline view - search + calendar) -->
     {% if not active_panel %}{% set active_panel = 'timeline' %}{% endif %}
     <div id="sidebar-panel"
-        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full overflow-hidden">
+        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full overflow-hidden {% if active_panel != 'timeline' %}hidden{% endif %}">
         <div id="sidebar-content"
             hx-trigger="load once"
             hx-get="/sidebar-timeline"
@@ -295,9 +332,10 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <!-- Notes Panel -->
     <div id="notes-panel"
         class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full {% if active_panel == 'notes' %}{% else %}hidden{% endif %}"
-        hx-trigger="memoUpdated from:body"
+        hx-trigger="load once, memoUpdated from:body"
         hx-get="/notes-panel"
-        hx-swap="innerHTML">
+        hx-swap="innerHTML"
+        hx-on::after-settle="highlightActiveNote()">
     </div>
 
     <!-- Resources Panel -->
@@ -310,32 +348,8 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
     <!-- Main Content -->
     <div id="main-content" class="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-        <!-- Header -->
-        <header class="flex items-center justify-between px-6 py-2.5 border-b border-border bg-white dark:bg-gray-900 flex-shrink-0">
-            <div class="flex items-center gap-3">
-                <span class="text-sm font-semibold text-card-fg">MinimaMemosa</span>
-            </div>
-            <div class="flex items-center gap-2">
-                <button onclick="toggleTheme()"
-                    class="p-1.5 rounded-lg hover:bg-muted text-muted-fg transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-                    </svg>
-                </button>
-                <div class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted cursor-pointer">
-                    <div class="avatar-initials avatar-initials-sm bg-blue-500 text-white">{{ avatar }}</div>
-                    <span class="text-sm text-card-fg">{{ username }}</span>
-                </div>
-                <a href="/logout" class="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1" title="Logout">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                    </svg>
-                </a>
-            </div>
-        </header>
-
         <!-- Timeline View -->
-        <div id="timeline-view" class="flex-1 flex flex-col overflow-hidden {% if active_panel != 'timeline' %}hidden{% endif %}">
+        <div id="timeline-view" class="flex-1 flex flex-col overflow-hidden">
             <div class="flex-1 overflow-y-auto px-6 py-5">
                 <div class="max-w-lg mx-auto">
                      <!-- Notion-style Editor -->
@@ -364,8 +378,8 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                       <input type="hidden" name="content" id="memo-editor-input" value="">
                                   </div>
                                   <!-- Slash Commands Dropdown -->
-                                  <div id="slash-menu" class="hidden bg-card border border-border rounded-lg shadow-lg py-1 min-w-[260px] z-50"></div>
-                                  <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
+                                   <div id="slash-menu" class="hidden bg-card border border-border rounded-lg shadow-lg py-1 min-w-[260px] z-50"></div>
+                                   <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <div class="flex items-center justify-between px-8 py-3 border-t border-border bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
                                       <div class="flex items-center gap-1">
@@ -428,9 +442,24 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
                     <!-- Timeline -->
                     <div id="timeline" class="space-y-1"
+                        {% if active_panel != 'notes' %}
                         hx-trigger="memoUpdated from:body"
+                        {% endif %}
                         hx-get="/memos-feed"
-                        hx-swap="innerHTML">
+                        hx-swap="innerHTML"
+                        {% if selected_note %}data-active-note-id="{{ selected_note.id }}"{% endif %}>
+                        {% if active_panel == 'notes' and selected_note %}
+                            {% set id = selected_note.id %}
+                            {% set content = selected_note.content %}
+                            {% set content_html = selected_note.content_html %}
+                            {% set visibility = selected_note.visibility %}
+                            {% set created_at = selected_note.created_at %}
+                            {% set created_at_relative = selected_note.created_at_relative %}
+                            {% set tags = selected_note.tags %}
+                            {% set resources = selected_note.resources %}
+                            {% set username = selected_note.username %}
+                            {% include "memo_fragment" %}
+                        {% else %}
                         {% for group in memo_groups %}
                         <div class="mb-4">
                             <div class="flex items-center gap-2 mb-3">
@@ -459,13 +488,14 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                             <p class="text-muted-fg text-sm">No memos yet. Write your first memo above!</p>
                         </div>
                         {% endif %}
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Note Detail View (hidden by default) -->
-        <div id="note-detail-view" class="flex-1 flex-col overflow-y-auto px-6 py-4 {% if active_panel != 'note' %}hidden{% endif %}">
+        <div id="note-detail-view" class="flex-1 flex-col overflow-y-auto px-6 py-4 hidden">
         </div>
     </div>
 </div>
@@ -512,6 +542,33 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             document.getElementById('memo-editor-input').value = getEditorText();
             updateSaveButtonState();
             return;
+        }
+        var _sm = document.getElementById('slash-menu');
+        if (_sm && !_sm.classList.contains('hidden')) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (_slashSelectedIdx < _slashFilteredCommands.length - 1) _slashSelectedIdx++;
+                else _slashSelectedIdx = 0;
+                _highlightSlashItem();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (_slashSelectedIdx > 0) _slashSelectedIdx--;
+                else _slashSelectedIdx = _slashFilteredCommands.length - 1;
+                _highlightSlashItem();
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                var cmd = _slashFilteredCommands[_slashSelectedIdx];
+                if (cmd) { hideSlashMenu(); applySlashCommand(cmd); }
+                return;
+            }
+            if (e.key === 'Escape') {
+                hideSlashMenu();
+                return;
+            }
         }
         if (e.key === '/') {
             setTimeout(function() { checkSlashCommand(el); }, 0);
@@ -560,11 +617,9 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         var ed = window.tiptapEditor;
         if (ed) {
             if (ed.isEmpty) return '';
-            if (ed.storage.markdown) {
-                return ed.storage.markdown.getMarkdown();
-            }
             var html = ed.getHTML();
             if (html && html !== '<p></p>') {
+                if (html.indexOf('?w=') >= 0) return html;
                 try {
                     var ts = new TurndownService({ headingStyle: 'atx' });
                     return ts.turndown(html);
@@ -698,25 +753,43 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     var FALLBACK_SLASH_COMMANDS = [
         { label: 'Heading 1', insert: '# ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>' },
         { label: 'Heading 2', insert: '## ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>' },
-        { label: 'Bold', insert: '****', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 010 8H6z"/></svg>' },
-        { label: 'Italic', insert: '**', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4h6m-2 0l-6 16"/></svg>' },
-        { label: 'Bullet List', insert: '- ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>' },
-        { label: 'Numbered List', insert: '1. ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h11M9 12h11M9 19h11M5 5v.01M5 12v.01M5 19v.01"/></svg>' },
-        { label: 'Code Block', insert: '```\n\n```', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>' },
-        { label: 'Blockquote', insert: '> ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>' },
-        { label: 'Todo List', insert: '- [ ] ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3 3L22 4"/></svg>' },
-        { label: 'Table', insert: '| Col1 | Col2 |\n|------|------|\n| Cell | Cell |', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 18h18M3 6h18"/></svg>' },
-        { label: 'Code', insert: '``', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>' },
+        { label: 'Bold', command: 'toggleBold', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 010 8H6z"/></svg>' },
+        { label: 'Italic', command: 'toggleItalic', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4h6m-2 0l-6 16"/></svg>' },
+        { label: 'Bullet List', command: 'toggleBulletList', insert: '- ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>' },
+        { label: 'Numbered List', command: 'toggleOrderedList', insert: '1. ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h11M9 12h11M9 19h11M5 5v.01M5 12v.01M5 19v.01"/></svg>' },
+        { label: 'Code Block', command: 'toggleCodeBlock', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>' },
+        { label: 'Blockquote', command: 'toggleBlockquote', insert: '> ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>' },
+        { label: 'Todo List', command: 'toggleTaskList', insert: '- [ ] ', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3 3L22 4"/></svg>' },
+        { label: 'Table', command: 'insertTable', params: { rows: 3, cols: 3 }, insert: '| Col1 | Col2 |\n|------|------|\n| Cell | Cell |', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 18h18M3 6h18"/></svg>' },
+        { label: 'Code', command: 'toggleCode', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>' },
     ];
     function applySlashCommand(cmd) {
         var ed = window.tiptapEditor;
         if (ed) {
-            var cursorPos = ed.state.selection.$anchor.pos;
-            var textBefore = ed.state.doc.textBetween(0, cursorPos, '\n', '');
-            var match = textBefore.match(/(^|\s)\/([a-z]*)$/i);
-            if (match) {
-                var slashStart = cursorPos - (match[0].length - (match[1] ? match[1].length : 0));
-                ed.chain().focus().deleteRange({ from: slashStart, to: cursorPos }).insertContent(cmd.insert).run();
+            if (cmd.command) {
+                var chain = ed.chain().focus();
+                if (typeof chain[cmd.command] === 'function') {
+                    var cursorPos = ed.state.selection.$anchor.pos;
+                    var textBefore = ed.state.doc.textBetween(0, cursorPos, '\n', '');
+                    var match = textBefore.match(/(^|\s)\/([a-z]*)$/i);
+                    if (match) {
+                        var slashStart = cursorPos - (match[0].length - (match[1] ? match[1].length : 0));
+                        chain = chain.deleteRange({ from: slashStart, to: cursorPos });
+                    }
+                    if (cmd.params) {
+                        chain[cmd.command](cmd.params).run();
+                    } else {
+                        chain[cmd.command]().run();
+                    }
+                }
+            } else if (cmd.insert) {
+                var cursorPos = ed.state.selection.$anchor.pos;
+                var textBefore = ed.state.doc.textBetween(0, cursorPos, '\n', '');
+                var match = textBefore.match(/(^|\s)\/([a-z]*)$/i);
+                if (match) {
+                    var slashStart = cursorPos - (match[0].length - (match[1] ? match[1].length : 0));
+                    ed.chain().focus().deleteRange({ from: slashStart, to: cursorPos }).insertContent(cmd.insert).run();
+                }
             }
         } else {
             var el = document.getElementById('memo-editor');
@@ -724,13 +797,16 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             var cursor = getTextOffset(el);
             var text = getEditorText();
             var before = text.substring(0, cursor);
-            var slashIdx = before.lastIndexOf('/');
-            var prefix = before.substring(0, slashIdx);
-            var after = text.substring(cursor);
-            var newText = prefix + cmd.insert + after;
-            el.innerText = newText;
-            var newPos = prefix.length + cmd.insert.length;
-            restoreCursor(el, Math.min(newPos, newText.length));
+            var match = before.match(/(^|\s)\/([a-z]*)$/i);
+            if (match) {
+                var slashStart = match.index + (match[1] ? match[1].length : 0);
+                var prefix = before.substring(0, slashStart);
+                var after = text.substring(cursor);
+                var newText = prefix + (cmd.insert || '') + after;
+                el.innerText = newText;
+                var newPos = slashStart + (cmd.insert || '').length;
+                restoreCursor(el, Math.min(newPos, newText.length));
+            }
         }
         document.getElementById('slash-menu').classList.add('hidden');
         document.getElementById('memo-editor-input').value = getTiptapMarkdown();
@@ -746,6 +822,18 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             document.getElementById('slash-menu').classList.add('hidden');
         }
     }
+    var _slashFilteredCommands = [];
+    var _slashSelectedIdx = 0;
+    function _highlightSlashItem() {
+        var menu = document.getElementById('slash-menu');
+        if (!menu) return;
+        var btns = menu.querySelectorAll('button');
+        btns.forEach(function(b, i) {
+            b.classList.toggle('bg-muted', i === _slashSelectedIdx);
+            b.classList.toggle('text-foreground', i === _slashSelectedIdx);
+            if (i === _slashSelectedIdx) b.scrollIntoView({ block: 'nearest' });
+        });
+    }
     function hideSlashMenu() {
         var menu = document.getElementById('slash-menu');
         if (!menu) return;
@@ -757,17 +845,21 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     }
     function showSlashMenu(query, _el, _view) {
         var menu = document.getElementById('slash-menu');
-        var filtered = query ? FALLBACK_SLASH_COMMANDS.filter(function(c) { return c.label.toLowerCase().includes(query); }) : FALLBACK_SLASH_COMMANDS;
-        if (!filtered.length) { hideSlashMenu(); return; }
+        _slashFilteredCommands = query ? FALLBACK_SLASH_COMMANDS.filter(function(c) { return c.label.toLowerCase().includes(query); }) : FALLBACK_SLASH_COMMANDS;
+        if (!_slashFilteredCommands.length) { hideSlashMenu(); return; }
         menu.innerHTML = '';
-        filtered.forEach(function(cmd) {
+        _slashFilteredCommands.forEach(function(cmd, i) {
             var btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors';
+            btn.dataset.index = i;
+            btn.className = 'flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground transition-colors';
             btn.innerHTML = cmd.icon + cmd.label;
             btn.onclick = function(e) { e.stopPropagation(); e.preventDefault(); hideSlashMenu(); applySlashCommand(cmd); };
+            btn.onmouseenter = function() { _slashSelectedIdx = i; _highlightSlashItem(); };
             menu.appendChild(btn);
         });
+        _slashSelectedIdx = 0;
+        _highlightSlashItem();
         var rect = null;
         if (_view && typeof _view.coordsAtPos === 'function') {
             try {
@@ -806,6 +898,148 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         menu.style.removeProperty('display');
     }
 
+    function showImageResizeMenu(img, x, y) {
+        var menu = document.getElementById('image-resize-menu');
+        if (!menu) return;
+        menu.style.top = Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4)) + 'px';
+        menu.style.left = Math.max(4, Math.min(x, window.innerWidth - 134)) + 'px';
+        menu.classList.remove('hidden');
+    }
+    function setImageWidth(width) {
+        var menu = document.getElementById('image-resize-menu');
+        if (menu) menu.classList.add('hidden');
+        var ed = window.tiptapEditor;
+        if (!ed) return;
+        var pos = window._clickedImgPos;
+        if (pos !== null && pos !== undefined) {
+            var node = ed.state.doc.nodeAt(pos);
+            if (node && node.type.name === 'image') {
+                var src = node.attrs.src || '';
+                var cleanSrc = src.replace(/[?#].*$/, '');
+                var pct = parseFloat(width);
+                var newSrc = width === '100%' || (pct >= 100) ? cleanSrc : cleanSrc + '?w=' + pct;
+                ed.chain().focus().setNodeSelection(pos).updateAttributes('image', { src: newSrc, style: 'width: ' + width }).run();
+                return;
+            }
+        }
+        ed.chain().focus().updateAttributes('image', { style: 'width: ' + width }).run();
+    }
+    document.addEventListener('click', function(e) {
+        var menu = document.getElementById('image-resize-menu');
+        if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && e.target.tagName !== 'IMG') {
+            menu.classList.add('hidden');
+        }
+    });
+    function closeImageModal() {
+        document.getElementById('image-modal').classList.add('hidden');
+    }
+    function highlightActiveNote() {
+        var timeline = document.getElementById('timeline');
+        var activeId = timeline ? timeline.getAttribute('data-active-note-id') : null;
+        if (!activeId) return;
+        document.querySelectorAll('#notes-panel [data-note-id]').forEach(function(el) {
+            el.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+            el.querySelector('.note-title')?.classList.remove('text-blue-600', 'dark:text-blue-400');
+        });
+        var selected = document.querySelector('#notes-panel [data-note-id="' + activeId + '"]');
+        if (selected) {
+            selected.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+            selected.querySelector('.note-title')?.classList.add('text-blue-600', 'dark:text-blue-400');
+        }
+    }
+    function openNote(id) {
+        var timeline = document.getElementById('timeline');
+        if (timeline) timeline.setAttribute('data-active-note-id', id);
+        highlightActiveNote();
+        if (timeline && document.querySelector('#notes-panel:not(.hidden)')) {
+            htmx.ajax('GET', '/memos/' + id + '/fragment', { target: '#timeline', swap: 'innerHTML' });
+        }
+    }
+    function closeNote() {
+        document.getElementById('note-detail-view').classList.add('hidden');
+        document.getElementById('note-detail-view').innerHTML = '';
+        document.getElementById('timeline-view').classList.remove('hidden');
+    }
+
+    /* ── Memo CRUD ── */
+    var editorAttachments = [];
+    function renderEditorAttachments() {}
+    function uploadFilesForEditor(files) {
+        var input = document.getElementById('image-upload-input');
+        if (!input) { input = document.getElementById('file-upload-input'); }
+        if (input) {
+            var dt = new DataTransfer();
+            for (var i = 0; i < files.length; i++) dt.items.add(files[i]);
+            input.files = dt.files;
+            var form = input.closest('form');
+            if (form) {
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.click();
+            }
+        }
+    }
+    function handleDrop(event) {
+        var files = [];
+        if (event.dataTransfer.items) {
+            for (var i = 0; i < event.dataTransfer.items.length; i++) {
+                if (event.dataTransfer.items[i].kind === 'file') {
+                    var f = event.dataTransfer.items[i].getAsFile();
+                    if (f) files.push(f);
+                }
+            }
+        } else {
+            for (var i = 0; i < event.dataTransfer.files.length; i++) {
+                files.push(event.dataTransfer.files[i]);
+            }
+        }
+        if (files.length) uploadFilesForEditor(files);
+    }
+    function editMemo(id) {
+        var container = document.getElementById('memo-' + id);
+        if (!container) return;
+        container.querySelector('.memo-display').classList.add('hidden');
+        var editEl = document.getElementById('memo-edit-' + id);
+        editEl.classList.remove('hidden');
+        editEl.setAttribute('hx-get', '/memos/' + id + '/edit');
+        editEl.setAttribute('hx-trigger', 'load');
+        editEl.setAttribute('hx-swap', 'innerHTML');
+        htmx.process(editEl);
+        htmx.trigger(editEl, 'load');
+    }
+    function cancelEdit(id) {
+        var container = document.getElementById('memo-' + id);
+        if (!container) return;
+        container.querySelector('.memo-display').classList.remove('hidden');
+        var editEl = document.getElementById('memo-edit-' + id);
+        editEl.classList.add('hidden');
+        editEl.innerHTML = '';
+    }
+    function deleteMemo(id) {
+        if (!confirm('Delete this memo?')) return;
+        var btn = document.querySelector('#memo-' + id + ' button[onclick*="deleteMemo"]');
+        if (btn) btn.disabled = true;
+        htmx.ajax('DELETE', '/memos/' + id, { target: '#memo-' + id, swap: 'outerHTML' });
+    }
+    function toggleVisDropdown(btn) {
+        var menu = btn.parentElement.querySelector('.vis-dropdown-menu');
+        if (!menu) return;
+        menu.classList.toggle('hidden');
+    }
+    function selectVis(btn) {
+        var dd = btn.closest('.visibility-dropdown');
+        if (!dd) return;
+        dd.querySelectorAll('.vis-dropdown-menu button').forEach(function(b) { b.classList.remove('bg-muted'); });
+        btn.classList.add('bg-muted');
+        dd.querySelector('.vis-label').innerHTML = btn.innerHTML;
+        dd.querySelector('input[type="hidden"]').value = btn.dataset.visValue;
+        dd.querySelector('.vis-dropdown-menu').classList.add('hidden');
+    }
+    function updateVisUI(dd) {
+        var val = dd.dataset.vis || 'private';
+        var btn = dd.querySelector('.vis-dropdown-menu button[data-vis-value="' + val + '"]');
+        if (btn) selectVis(btn);
+    }
+
     /* ── Tiptap Init (loaded from local bundle) ── */
     (function() {
         var mountEl = document.getElementById('memo-editor');
@@ -817,19 +1051,28 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             var Markdown = window.Tiptap.Markdown;
             var CodeBlockLowlight = window.Tiptap.CodeBlockLowlight;
             var lowlight = window.Tiptap.lowlight;
-            var ImageExt = window.Tiptap.Image;
+            var ImageExt = window.Tiptap.Image.extend({
+                addAttributes() { return { src: { default: null }, alt: { default: null }, title: { default: null }, style: { default: 'width: 100%' } } },
+                parseHTML() { return [{ tag: 'img[src]', getAttrs: function(dom) { var src=dom.getAttribute('src')||''; var style=dom.getAttribute('style')||'width: 100%'; var q=src.indexOf('?'); if(q>=0){var p=src.substring(q+1).split('&');for(var i=0;i<p.length;i++){var kv=p[i].split('=');if(kv[0]==='w'){var v=parseFloat(kv[1]);if(!isNaN(v)&&v>0&&v<100){style='width: '+v+'%'}}}} return{src:src,alt:dom.getAttribute('alt')||'',title:dom.getAttribute('title')||'',style:style} } }]; },
+                renderHTML({node}) { var src=node.attrs.src||''; var alt=node.attrs.alt||''; var title=node.attrs.title||''; var style=node.attrs.style||'width: 100%'; return ['img',{src:src,alt:alt,title:title,style:style}] },
+            });
             var LinkExt = window.Tiptap.Link;
             var TableExt = window.Tiptap.Table;
+            var TableRowExt = window.Tiptap.TableRow;
+            var TableCellExt = window.Tiptap.TableCell;
+            var TableHeaderExt = window.Tiptap.TableHeader;
+            var TaskListExt = window.Tiptap.TaskList;
+            var TaskItemExt = window.Tiptap.TaskItem;
 
+            window._clickedImgPos = null;
             mountEl.classList.remove('animate-pulse', 'bg-muted/30', 'rounded', 'shimmer-bg');
-            // Remove parent's contenteditable so Tiptap's .ProseMirror handles editing
             mountEl.removeAttribute('contenteditable');
             mountEl.removeAttribute('data-empty');
             mountEl.oninput = null;
             mountEl.onkeydown = null;
             window.tiptapEditor = new Editor({
                 element: mountEl,
-extensions: [
+ extensions: [
                      StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                      Placeholder.configure({ placeholder: "What's on your mind..." }),
                      Markdown,
@@ -837,6 +1080,11 @@ extensions: [
                      ImageExt,
                      LinkExt.configure({ openOnClick: false }),
                      TableExt,
+                     TableRowExt,
+                     TableCellExt,
+                     TableHeaderExt,
+                     TaskListExt,
+                     TaskItemExt.configure({ nested: true }),
                  ],
                 editorProps: {
                     attributes: { class: 'focus:outline-none text-base leading-snug' },
@@ -861,7 +1109,55 @@ extensions: [
                         }
                         return false;
                     },
+                    handleClick: function(view, pos, event) {
+                        if (event.target && event.target.tagName === 'IMG') {
+                            event.preventDefault();
+                            var imgPos = view.posAtDOM(event.target, 0);
+                            if (imgPos !== null && imgPos !== undefined) pos = imgPos;
+                            _clickedImgView = view;
+                            _clickedImgPos = pos;
+                            showImageResizeMenu(event.target, event.clientX, event.clientY);
+                            return true;
+                        }
+                        return false;
+                    },
                     handleKeyDown: function(view, event) {
+                        var _sm = document.getElementById('slash-menu');
+                        if (_sm && !_sm.classList.contains('hidden')) {
+                            if (event.key === 'ArrowDown') {
+                                event.preventDefault();
+                                if (_slashSelectedIdx < _slashFilteredCommands.length - 1) _slashSelectedIdx++;
+                                else _slashSelectedIdx = 0;
+                                _highlightSlashItem();
+                                return true;
+                            }
+                            if (event.key === 'ArrowUp') {
+                                event.preventDefault();
+                                if (_slashSelectedIdx > 0) _slashSelectedIdx--;
+                                else _slashSelectedIdx = _slashFilteredCommands.length - 1;
+                                _highlightSlashItem();
+                                return true;
+                            }
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                var cmd = _slashFilteredCommands[_slashSelectedIdx];
+                                if (cmd) { hideSlashMenu(); applySlashCommand(cmd); }
+                                return true;
+                            }
+                            if (event.key === 'Escape') {
+                                hideSlashMenu();
+                                return true;
+                            }
+                            if ((event.key.length === 1 || event.key === 'Backspace') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                                setTimeout(function() {
+                                    var tb = view.state.doc.textBetween(0, view.state.selection.$anchor.pos, '\n', '');
+                                    var m = tb.match(/(^|\s)\/([a-z]*)$/i);
+                                    if (m) { showSlashMenu(m[2] || '', mountEl, view); }
+                                    else { hideSlashMenu(); }
+                                }, 0);
+                            }
+                            return false;
+                        }
                         if (event.key === 'ArrowDown') {
                             var state = view.state;
                             var $head = state.selection.$head;
@@ -884,7 +1180,8 @@ extensions: [
                             }
                         }
                         if (event.key === '/') {
-                                                        setTimeout(function() { showSlashMenu('', mountEl, view); }, 0);
+                            setTimeout(function() { showSlashMenu('', mountEl, view); }, 0);
+                            return false;
                         }
                         return false;
                     }
@@ -894,26 +1191,24 @@ extensions: [
                     if (!ed) return;
                     var isEmpty = ed.isEmpty;
                     if (isEmpty) {
-                        document.getElementById('memo-edit-input-{{ id }}').value = '';
-                    } else if (ed.storage.markdown) {
-                        var md = ed.storage.markdown.getMarkdown();
-                        document.getElementById('memo-edit-input-{{ id }}').value = md;
-                        isEmpty = md.trim() === '';
+                        document.getElementById('memo-editor-input').value = '';
                     } else {
                         var html = ed.getHTML();
                         try {
-                            var ts = new TurndownService({ headingStyle: 'atx' });
-                            var md2 = ts.turndown(html);
-                            document.getElementById('memo-edit-input-{{ id }}').value = md2;
-                            isEmpty = md2.trim() === '';
+                            if (html.indexOf('?w=') >= 0) {
+                                document.getElementById('memo-editor-input').value = html;
+                                isEmpty = false;
+                            } else {
+                                var ts = new TurndownService({ headingStyle: 'atx' });
+                                var md2 = ts.turndown(html);
+                                document.getElementById('memo-editor-input').value = md2;
+                                isEmpty = md2.trim() === '';
+                            }
                         } catch(e) { isEmpty = ed.getText().trim() === ''; }
                     }
                     updateSaveButtonState();
                 },
             });
-            if (existingMd && existingMd.trim()) {
-                window.tiptapEditor.commands.setContent(existingMd, true);
-            }
         } else {
             mountEl.classList.remove('animate-pulse', 'bg-muted/30', 'rounded', 'shimmer-bg');
             mountEl.setAttribute('contenteditable', 'true');
@@ -923,56 +1218,8 @@ extensions: [
         var dd = document.querySelector('#memo-form .visibility-dropdown');
         if (dd) updateVisUI(dd);
     })();
-    document.addEventListener('keydown', function(e) {
-        if (e.key === '/' && window.tiptapEditor) {
-            var mountEl = document.getElementById('memo-editor');
-            if (!mountEl || !mountEl.contains(document.activeElement)) return;
-            showSlashMenu('', mountEl, window.tiptapEditor);
-        }
-    });
     document.addEventListener('click', function() { hideSlashMenu(); });
     </script>
-    <div class="flex items-center justify-between px-4 py-2 border-t border-border">
-        <div class="flex items-center gap-1">
-            <div class="relative">
-                <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </button>
-                <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-h-[200px] overflow-y-auto">
-                    <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
-                </div>
-            </div>
-            <div class="relative">
-                <button type="button" onclick="togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                </button>
-                <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px]">
-                    <button type="button" onclick="uploadImage()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#128247;</span> Upload Image</button>
-                    <button type="button" onclick="uploadFile()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#128206;</span> Upload File</button>
-                    <button type="button" id="record-audio-btn" onclick="toggleAudioRecording()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#127908;</span><span id="record-label">Record Audio</span></button>
-                    <button type="button" onclick="toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><span>&#128279;</span> Link Memo</button>
-                </div>
-                <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
-                    <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search memos..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
-                    <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
-                </div>
-            </div>
-            <div class="visibility-dropdown relative" data-vis="private">
-                <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
-                    <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </button>
-                <div class="vis-dropdown-menu hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px] z-50">
-                    <button type="button" data-vis-value="public" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Public</button>
-                    <button type="button" data-vis-value="protected" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>Protected</button>
-                    <button type="button" data-vis-value="private" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</button>
-                </div>
-                <input type="hidden" name="visibility" value="private">
-            </div>
-            <button type="submit" class="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">Save</button>
-        </div>
-    </div>
-</form>
 {% endblock %}"##;
 
 const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
@@ -1157,10 +1404,10 @@ const NOTES_PANEL_TEMPLATE: &str = r#"<div class="flex flex-col h-full">
     <div class="flex-1 overflow-y-auto p-2 space-y-1">
         {% if notes %}
             {% for note in notes %}
-            <div onclick="openNote({{ note.id }})"
+            <div data-note-id="{{ note.id }}" onclick="openNote({{ note.id }})"
                 class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30 last:border-0">
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-foreground truncate flex items-center gap-1.5">
+                    <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
                         {{ note.title }}
                         {% if note.visibility == 'public' %}
                         <svg class="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -1262,13 +1509,13 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
         <div id="memo-edit-memo-editor-{{ id }}"
              class="w-full bg-transparent text-foreground text-base leading-snug min-h-[6rem] tiptap-editor max-w-none focus:outline-none"
              data-placeholder="What's on your mind..."
-             data-content="{{ content }}"
+             data-content="{{ content|e }}"
              oninput="onFallbackInput(this)"
              onkeydown="onFallbackKeydown(event, this)"></div>
         <div id="attachment-preview-container" class="border border-border rounded-xl bg-card overflow-hidden hidden">
             <div id="attachment-preview-list" class="flex flex-col"></div>
         </div>
-        <input type="hidden" name="content" id="memo-edit-input-{{ id }}" value="{{ content }}">
+        <input type="hidden" name="content" id="memo-edit-input-{{ id }}" value="{{ content|e }}">
     </div>
     <script>
     (function() {
@@ -1281,9 +1528,18 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             var Markdown = window.Tiptap.Markdown;
             var CodeBlockLowlight = window.Tiptap.CodeBlockLowlight;
             var lowlight = window.Tiptap.lowlight;
-            var ImageExt = window.Tiptap.Image;
+            var ImageExt = window.Tiptap.Image.extend({
+                addAttributes() { return { src: { default: null }, alt: { default: null }, title: { default: null }, style: { default: 'width: 100%' } } },
+                parseHTML() { return [{ tag: 'img[src]', getAttrs: function(dom) { var src=dom.getAttribute('src')||''; var style=dom.getAttribute('style')||'width: 100%'; var q=src.indexOf('?'); if(q>=0){var p=src.substring(q+1).split('&');for(var i=0;i<p.length;i++){var kv=p[i].split('=');if(kv[0]==='w'){var v=parseFloat(kv[1]);if(!isNaN(v)&&v>0&&v<100){style='width: '+v+'%'}}}} return{src:src,alt:dom.getAttribute('alt')||'',title:dom.getAttribute('title')||'',style:style} } }]; },
+                renderHTML({node}) { var src=node.attrs.src||''; var alt=node.attrs.alt||''; var title=node.attrs.title||''; var style=node.attrs.style||'width: 100%'; return ['img',{src:src,alt:alt,title:title,style:style}] },
+            });
             var LinkExt = window.Tiptap.Link;
             var TableExt = window.Tiptap.Table;
+            var TableRowExt = window.Tiptap.TableRow;
+            var TableCellExt = window.Tiptap.TableCell;
+            var TableHeaderExt = window.Tiptap.TableHeader;
+            var TaskListExt = window.Tiptap.TaskList;
+            var TaskItemExt = window.Tiptap.TaskItem;
             mountEl.classList.remove('animate-pulse', 'bg-muted/30', 'rounded', 'shimmer-bg');
             mountEl.removeAttribute('contenteditable');
             mountEl.removeAttribute('data-empty');
@@ -1301,6 +1557,11 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     ImageExt,
                     LinkExt.configure({ openOnClick: false }),
                     TableExt,
+                    TableRowExt,
+                    TableCellExt,
+                    TableHeaderExt,
+                    TaskListExt,
+                    TaskItemExt.configure({ nested: true }),
                 ],
                 editorProps: {
                     attributes: { class: 'focus:outline-none text-base leading-snug' },
@@ -1325,7 +1586,55 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                         }
                         return false;
                     },
+                    handleClick: function(view, pos, event) {
+                        if (event.target && event.target.tagName === 'IMG') {
+                            event.preventDefault();
+                            var imgPos = view.posAtDOM(event.target, 0);
+                            if (imgPos !== null && imgPos !== undefined) pos = imgPos;
+                            _clickedImgView = view;
+                            _clickedImgPos = pos;
+                            showImageResizeMenu(event.target, event.clientX, event.clientY);
+                            return true;
+                        }
+                        return false;
+                    },
                     handleKeyDown: function(view, event) {
+                        var _sm = document.getElementById('slash-menu');
+                        if (_sm && !_sm.classList.contains('hidden')) {
+                            if (event.key === 'ArrowDown') {
+                                event.preventDefault();
+                                if (_slashSelectedIdx < _slashFilteredCommands.length - 1) _slashSelectedIdx++;
+                                else _slashSelectedIdx = 0;
+                                _highlightSlashItem();
+                                return true;
+                            }
+                            if (event.key === 'ArrowUp') {
+                                event.preventDefault();
+                                if (_slashSelectedIdx > 0) _slashSelectedIdx--;
+                                else _slashSelectedIdx = _slashFilteredCommands.length - 1;
+                                _highlightSlashItem();
+                                return true;
+                            }
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                var cmd = _slashFilteredCommands[_slashSelectedIdx];
+                                if (cmd) { hideSlashMenu(); applySlashCommand(cmd); }
+                                return true;
+                            }
+                            if (event.key === 'Escape') {
+                                hideSlashMenu();
+                                return true;
+                            }
+                            if ((event.key.length === 1 || event.key === 'Backspace') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                                setTimeout(function() {
+                                    var tb = view.state.doc.textBetween(0, view.state.selection.$anchor.pos, '\n', '');
+                                    var m = tb.match(/(^|\s)\/([a-z]*)$/i);
+                                    if (m) { showSlashMenu(m[2] || '', mountEl, view); }
+                                    else { hideSlashMenu(); }
+                                }, 0);
+                            }
+                            return false;
+                        }
                         if (event.key === 'ArrowDown') {
                             var state = view.state;
                             var $head = state.selection.$head;
@@ -1348,32 +1657,35 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                             }
                         }
                         if (event.key === '/') {
-                                                        setTimeout(function() { showSlashMenu('', mountEl, view); }, 0);
+                            setTimeout(function() { showSlashMenu('', mountEl, view); }, 0);
+                            return false;
                         }
                         return false;
                     }
                 },
-                onUpdate: function() {
-                    var ed = window.tiptapEditor;
-                    if (!ed) return;
-                    var isEmpty = ed.isEmpty;
-                    if (isEmpty) {
-                        document.getElementById('memo-edit-input-{{ id }}').value = '';
-                    } else if (ed.storage.markdown) {
-                        var md = ed.storage.markdown.getMarkdown();
-                        document.getElementById('memo-edit-input-{{ id }}').value = md;
-                        isEmpty = md.trim() === '';
-                    } else {
-                        var html = ed.getHTML();
-                        try {
-                            var ts = new TurndownService({ headingStyle: 'atx' });
-                            var md2 = ts.turndown(html);
-                            document.getElementById('memo-edit-input-{{ id }}').value = md2;
-                            isEmpty = md2.trim() === '';
-                        } catch(e) { isEmpty = ed.getText().trim() === ''; }
-                    }
-                    updateSaveButtonState();
-                },
+                    onUpdate: function() {
+                        var ed = window.tiptapEditor;
+                        if (!ed) return;
+                        var isEmpty = ed.isEmpty;
+                        if (isEmpty) {
+                            document.getElementById('memo-edit-input-{{ id }}').value = '';
+                        } else {
+                            var html = ed.getHTML();
+                            try {
+                                if (html.indexOf('?w=') >= 0) {
+                                    document.getElementById('memo-edit-input-{{ id }}').value = html;
+                                    isEmpty = false;
+                                } else {
+                                    var ts = new TurndownService({ headingStyle: 'atx' });
+                                    var md2 = ts.turndown(html);
+                                    document.getElementById('memo-edit-input-{{ id }}').value = md2;
+                                    isEmpty = md2.trim() === '';
+                                }
+                            } catch(e) { isEmpty = ed.getText().trim() === ''; }
+                        }
+                        var btn = document.getElementById('save-memo-edit-btn-{{ id }}');
+                        if (btn) btn.disabled = isEmpty;
+                    },
             });
             if (existingMd && existingMd.trim()) {
                 window.tiptapEditor.commands.setContent(existingMd, true);
@@ -1387,13 +1699,6 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
         var dd = document.querySelector('#memo-edit-form-{{ id }} .visibility-dropdown');
         if (dd) updateVisUI(dd);
     })();
-    document.addEventListener('keydown', function(e) {
-        if (e.key === '/' && window.tiptapEditor) {
-            var mountEl = document.getElementById('memo-edit-memo-editor-{{ id }}');
-            if (!mountEl || !mountEl.contains(document.activeElement)) return;
-            setTimeout(function() { showSlashMenu('', mountEl, window.tiptapEditor); }, 0);
-        }
-    });
 </script>
     <div class="flex items-center justify-between px-4 py-2 border-t border-border">
         <div class="flex items-center gap-1">
@@ -1451,10 +1756,16 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             </div>
             <span class="text-xs text-muted-fg">Ctrl+Enter</span>
         </div>
-        <button type="submit" id="save-memo-btn" disabled
-            class="py-1.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
-            Save
-        </button>
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="cancelEdit({{ id }})"
+                class="py-1.5 px-4 bg-transparent hover:bg-muted text-foreground text-sm font-medium rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button type="submit" id="save-memo-edit-btn-{{ id }}" disabled
+                class="py-1.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
+                Save
+            </button>
+        </div>
     </div>
 </form>"##;
 
@@ -1512,6 +1823,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
         {% else %}
             <p class="text-xs text-muted-fg text-center py-10">No resources yet.<br>Drag & drop files into the editor or click Upload.</p>
         {% endif %}
+    </div>
     </div>
 </div>"##;
 
