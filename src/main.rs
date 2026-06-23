@@ -5,10 +5,10 @@ mod templates;
 use std::sync::Arc;
 
 use axum::{
-    body::Bytes,
+    body::{Bytes, Body},
     extract::{Form, Multipart, Path, State, ConnectInfo},
     http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Redirect},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post, put},
     Json, Router,
 };
@@ -338,7 +338,7 @@ fn is_valid_session(headers: &HeaderMap, db: &db::Database) -> bool {
 }
 
 fn redirect_to_app() -> Redirect {
-    Redirect::to("/app")
+    Redirect::to("/app/timeline")
 }
 
 fn session_cookie(user_id: i64) -> (HeaderMap, StatusCode) {
@@ -613,11 +613,11 @@ async fn get_logout() -> impl IntoResponse {
     (headers, Redirect::to("/login"))
 }
 
-async fn get_app(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let user_id = match get_session_user_id(&headers) {
-        Some(id) => id,
-        None => return Redirect::to("/login").into_response(),
-    };
+async fn render_app_page(
+    user_id: i64,
+    state: &Arc<AppState>,
+    active_panel: &str,
+) -> Response<Body> {
     let user = match state.db.get_user_by_id(user_id) {
         Ok(Some(u)) => u,
         _ => return Redirect::to("/login").into_response(),
@@ -629,7 +629,40 @@ async fn get_app(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl
         "username": user.1,
         "avatar": avatar,
         "memo_groups": memo_groups,
+        "active_panel": active_panel,
     })).into_response()
+}
+
+async fn get_app_root(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return Redirect::to("/login").into_response(),
+    };
+    render_app_page(user_id, &state, "timeline").await
+}
+
+async fn get_app_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return Redirect::to("/login").into_response(),
+    };
+    render_app_page(user_id, &state, "timeline").await
+}
+
+async fn get_app_notes(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return Redirect::to("/login").into_response(),
+    };
+    render_app_page(user_id, &state, "notes").await
+}
+
+async fn get_app_resources(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return Redirect::to("/login").into_response(),
+    };
+    render_app_page(user_id, &state, "resources").await
 }
 
 async fn post_memos(
@@ -1208,7 +1241,10 @@ async fn main() {
         .route("/register", get(get_register).post(post_register))
         .route("/share/:id", get(get_share_note).post(post_share_note))
         .route("/logout", get(get_logout))
-        .route("/app", get(get_app))
+        .route("/app", get(get_app_root))
+        .route("/app/timeline", get(get_app_timeline))
+        .route("/app/notes", get(get_app_notes))
+        .route("/app/resources", get(get_app_resources))
         .route("/memos", post(post_memos))
         .route("/memos/:id", put(put_memos).delete(delete_memo))
         .route("/memos/:id/edit", get(get_memo_edit_form))
