@@ -351,9 +351,9 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         <!-- Timeline View -->
         <div id="timeline-view" class="flex-1 flex flex-col overflow-hidden">
             <div class="flex-1 overflow-y-auto px-6 py-5">
-                <div class="max-w-lg mx-auto">
+                <div class="max-w-2xl mx-auto">
                      <!-- Notion-style Editor -->
-                     <div class="max-w-3xl mx-auto mb-8">
+                     <div class="max-w-2xl mx-auto mb-8">
                          <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                               <form id="memo-form" hx-post="/memos"
                                     hx-swap="afterbegin"
@@ -1225,6 +1225,9 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 {% endblock %}"##;
 
 const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
+    <div class="px-4 py-3 border-b border-border flex-shrink-0">
+        <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">Timeline</h2>
+    </div>
     <!-- Search -->
     <div class="px-3 pt-3 pb-2 flex-shrink-0">
         <input type="text" name="q" placeholder="Search memos..."

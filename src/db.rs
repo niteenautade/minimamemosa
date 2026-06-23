@@ -328,21 +328,6 @@ impl Database {
         }
     }
 
-    pub fn get_resources(&self, user_id: i64) -> rusqlite::Result<Vec<(i64, String, String, String, i64, String)>> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT id, filename, original_name, mime_type, size, created_at FROM resources WHERE user_id = ?1 ORDER BY created_at DESC"
-        )?;
-        let rows = stmt.query_map(params![user_id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?))
-        })?;
-        let mut resources = Vec::new();
-        for row in rows {
-            resources.push(row?);
-        }
-        Ok(resources)
-    }
-
     pub fn delete_resource(&self, resource_id: i64, user_id: i64) -> rusqlite::Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM resources WHERE id = ?1 AND user_id = ?2", params![resource_id, user_id])?;
