@@ -7,6 +7,9 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MinimaMemosa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="/static/tailwindcss.js"></script>
     <script>
         tailwind.config = {
@@ -14,7 +17,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif'],
+                        sans: ['Raleway', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif'],
                         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', '"Liberation Mono"', '"Courier New"', 'monospace'],
                     },
                     colors: {
@@ -27,6 +30,18 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
                         'muted-fg': 'var(--muted-fg)',
                         sidebar: 'var(--sidebar)',
                         'sidebar-fg': 'var(--sidebar-fg)',
+                        blue: {
+                            50: 'var(--a50)',
+                            100: 'var(--a100)',
+                            200: 'var(--a200)',
+                            300: 'var(--a300)',
+                            400: 'var(--a400)',
+                            500: 'var(--a500)',
+                            600: 'var(--a600)',
+                            700: 'var(--a700)',
+                            800: 'var(--a800)',
+                            900: 'var(--a900)',
+                        }
                     }
                 }
             }
@@ -81,50 +96,70 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
     <style>
         #global-loader { position: fixed; inset: 0; z-index: 99999; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); backdrop-filter: blur(2px); }
         #global-loader.active { display: flex; }
-        #global-loader svg { width: 48px; height: 48px; }
+        #global-loader svg { width: 48px; height: 48px; fill: var(--a600); }
         :root {
-            --bg: oklch(0.9818 0.0054 95.0986);
-            --fg: oklch(0.2438 0.0269 95.7226);
-            --card: oklch(1 0 0);
-            --card-fg: oklch(0.1908 0.002 106.5859);
-            --border: oklch(0.8847 0.0069 97.3627);
-            --muted: oklch(0.9341 0.0153 90.239);
-            --muted-fg: oklch(0.5559 0.0075 97.4233);
-            --sidebar: oklch(0.9663 0.008 98.8792);
-            --sidebar-fg: oklch(0.359 0.0051 106.6524);
+            --bg: oklch(0.972 0.004 85);
+            --fg: oklch(0.18 0.008 85);
+            --card: oklch(0.995 0.002 85);
+            --card-fg: oklch(0.18 0.008 85);
+            --border: oklch(0.89 0.006 80);
+            --muted: oklch(0.935 0.006 85);
+            --muted-fg: oklch(0.52 0.008 80);
+            --sidebar: oklch(0.955 0.005 85);
+            --sidebar-fg: oklch(0.32 0.007 85);
+            --a50: oklch(0.95 0.025 75);
+            --a100: oklch(0.9 0.04 70);
+            --a200: oklch(0.82 0.07 65);
+            --a300: oklch(0.72 0.09 60);
+            --a400: oklch(0.62 0.11 55);
+            --a500: oklch(0.55 0.12 50);
+            --a600: oklch(0.48 0.13 45);
+            --a700: oklch(0.42 0.11 40);
+            --a800: oklch(0.35 0.09 35);
+            --a900: oklch(0.28 0.07 30);
         }
         .dark {
-            --bg: oklch(0.24 0.008 255);
-            --fg: oklch(0.9 0.006 255);
-            --card: oklch(0.275 0.009 255);
-            --card-fg: oklch(0.9 0.006 255);
-            --border: oklch(0.38 0.01 255);
-            --muted: oklch(0.35 0.011 255);
-            --muted-fg: oklch(0.72 0.007 255);
-            --sidebar: oklch(0.21 0.009 255);
-            --sidebar-fg: oklch(0.76 0.007 255);
+            --bg: oklch(0.17 0.006 85);
+            --fg: oklch(0.88 0.004 85);
+            --card: oklch(0.21 0.006 85);
+            --card-fg: oklch(0.88 0.004 85);
+            --border: oklch(0.29 0.006 80);
+            --muted: oklch(0.25 0.006 85);
+            --muted-fg: oklch(0.7 0.006 80);
+            --sidebar: oklch(0.14 0.006 85);
+            --sidebar-fg: oklch(0.75 0.006 85);
+            --a50: oklch(0.18 0.015 30);
+            --a100: oklch(0.23 0.025 35);
+            --a200: oklch(0.3 0.035 40);
+            --a300: oklch(0.4 0.05 45);
+            --a400: oklch(0.5 0.07 50);
+            --a500: oklch(0.58 0.09 55);
+            --a600: oklch(0.66 0.1 60);
+            --a700: oklch(0.73 0.09 65);
+            --a800: oklch(0.81 0.07 70);
+            --a900: oklch(0.89 0.05 75);
         }
-        body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif); }
-        .memo-content h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
-        .memo-content h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
-        .memo-content h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.25rem; }
-        .memo-content p { margin-bottom: 0; line-height: 1.5; }
+        body { font-family: 'Raleway', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; font-weight: 400; }
+        .memo-content { font-weight: 400; }
+        .memo-content h1 { font-size: 1.375rem; font-weight: 600; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+        .memo-content h2 { font-size: 1.1875rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .memo-content h3 { font-size: 1.0625rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .memo-content p { margin-bottom: 0; line-height: 1.65; }
         .memo-content p:last-child { margin-bottom: 0; }
-        .tiptap-editor p { margin-bottom: 0; line-height: 1.5; }
+        .tiptap-editor p { margin-bottom: 0; line-height: 1.65; }
         .tiptap-editor p:last-child { margin-bottom: 0; }
-        .tiptap-editor h1 { font-size: 1.5em; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.25rem; }
-        .tiptap-editor h2 { font-size: 1.25em; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
-        .tiptap-editor h3 { font-size: 1.1em; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+        .tiptap-editor h1 { font-size: 1.375em; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.25rem; }
+        .tiptap-editor h2 { font-size: 1.1875em; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+        .tiptap-editor h3 { font-size: 1.0625em; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
         .memo-content ul, .memo-content ol { padding-left: 1.5rem; margin-bottom: 0.5rem; }
         .memo-content li { list-style: disc; margin-bottom: 0.25rem; }
         .memo-content ol li { list-style: decimal; }
-        .memo-content code { background: var(--muted); padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875rem; color: var(--fg); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .memo-content code { background: var(--muted); padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.8125rem; color: var(--fg); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
         .memo-content pre { background: var(--muted); padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.75rem; border: 1px solid var(--border); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
         .memo-content pre code { background: none; padding: 0; color: inherit; }
         .memo-content blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; margin: 0.5rem 0; color: var(--muted-fg); }
-        .memo-content a { color: oklch(0.45 0.08 250); text-decoration: none; }
+        .memo-content a { color: var(--a600); text-decoration: none; }
         .memo-content a:hover { text-decoration: underline; }
-        .dark .memo-content a { color: oklch(0.62 0.11 250); }
         .memo-content hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
         .memo-content table { border-collapse: collapse; margin-bottom: 0.5rem; width: 100%; }
         .memo-content th, .memo-content td { border: 1px solid var(--border); padding: 0.375rem 0.75rem; text-align: left; }
@@ -133,12 +168,11 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .memo-content ul.task-list { list-style: none; padding-left: 0; }
         .memo-content li.task-list-item { display: flex; align-items: flex-start; gap: 0.375rem; }
         .memo-content li.task-list-item input[type="checkbox"] { margin-top: 0.25rem; }
-        .avatar-initials { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; flex-shrink: 0; }
-        .avatar-initials-sm { width: 1.5rem; height: 1.5rem; font-size: 0.75rem; }
+        .avatar-initials { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 500; flex-shrink: 0; }
+        .avatar-initials-sm { width: 1.5rem; height: 1.5rem; font-size: 0.6875rem; }
         .auto-expand-textarea { min-height: 2.5rem; overflow: hidden; resize: none; }
         .memo-editor { transition: border-color 0.15s ease; }
-        .memo-editor:focus-within { border-color: oklch(0.45 0.08 250); }
-        .dark .memo-editor:focus-within { border-color: oklch(0.62 0.11 250); }
+        .memo-editor:focus-within { border-color: var(--a500); }
         @keyframes shimmer {
             0% { background-position: -200% 0; }
             100% { background-position: 200% 0; }
@@ -154,9 +188,9 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         }
         .tiptap-editor .ProseMirror { outline: none; white-space: pre-wrap; word-wrap: break-word; min-height: 4rem; }
         .tiptap-editor .ProseMirror p { margin: 0.25rem 0; }
-        .tiptap-editor .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
-        .tiptap-editor .ProseMirror h2 { font-size: 1.25rem; font-weight: 600; margin: 0.25rem 0; }
-        .tiptap-editor .ProseMirror h3 { font-size: 1.125rem; font-weight: 600; margin: 0.25rem 0; }
+        .tiptap-editor .ProseMirror h1 { font-size: 1.375rem; font-weight: 600; margin: 0.25rem 0; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+        .tiptap-editor .ProseMirror h2 { font-size: 1.1875rem; font-weight: 600; margin: 0.25rem 0; }
+        .tiptap-editor .ProseMirror h3 { font-size: 1.0625rem; font-weight: 600; margin: 0.25rem 0; }
         .tiptap-editor .ProseMirror ul, .tiptap-editor .ProseMirror ol { padding-left: 1.25rem; margin: 0.25rem 0; }
         .tiptap-editor .ProseMirror li { list-style: disc; }
         .tiptap-editor .ProseMirror ol li { list-style: decimal; }
@@ -165,12 +199,11 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .tiptap-editor .ProseMirror ul[data-type="taskList"] li > label { display: flex; align-items: flex-start; gap: 0.375rem; flex: 1; cursor: pointer; }
         .tiptap-editor .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] { margin-top: 0.3rem; cursor: pointer; }
         .tiptap-editor .ProseMirror ul[data-type="taskList"] li > label p { margin: 0; flex: 1; }
-        .tiptap-editor .ProseMirror code { background: var(--muted); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.875rem; }
+        .tiptap-editor .ProseMirror code { background: var(--muted); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.8125rem; }
         .tiptap-editor .ProseMirror pre { background: var(--muted); padding: 0.5rem; border-radius: 0.375rem; margin: 0.25rem 0; }
         .tiptap-editor .ProseMirror pre code { background: none; padding: 0; }
         .tiptap-editor .ProseMirror blockquote { border-left: 2px solid var(--border); padding-left: 0.5rem; margin: 0.25rem 0; color: var(--muted-fg); }
-        .tiptap-editor .ProseMirror a { color: oklch(0.45 0.08 250); }
-        .dark .tiptap-editor .ProseMirror a { color: oklch(0.62 0.11 250); }
+        .tiptap-editor .ProseMirror a { color: var(--a600); }
         .tiptap-editor .ProseMirror hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
         .tiptap-editor .ProseMirror table { border-collapse: collapse; margin: 0.25rem 0; width: 100%; }
         .tiptap-editor .ProseMirror th, .tiptap-editor .ProseMirror td { border: 1px solid var(--border); padding: 0.25rem 0.5rem; text-align: left; }
@@ -483,7 +516,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <div class="w-14 flex-shrink-0 bg-card border-r border-border flex flex-col items-center py-3 gap-2 z-20">
         <a id="icon-timeline"
             href="/app/timeline"
-            class="p-2.5 rounded-xl {% if active_panel == 'timeline' %}bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
+            class="p-2.5 rounded-xl {% if active_panel == 'timeline' %}bg-blue-100 dark:bg-blue-200/80 text-blue-600 dark:text-blue-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Timeline">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/>
@@ -493,7 +526,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         </a>
         <a id="icon-notes"
             href="/app/notes"
-            class="p-2.5 rounded-xl {% if active_panel == 'notes' %}bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
+            class="p-2.5 rounded-xl {% if active_panel == 'notes' %}bg-blue-100 dark:bg-blue-200/80 text-blue-600 dark:text-blue-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Notes">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="2"/>
@@ -504,7 +537,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         </a>
         <a id="icon-resources"
             href="/app/resources"
-            class="p-2.5 rounded-xl {% if active_panel == 'resources' %}bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
+            class="p-2.5 rounded-xl {% if active_panel == 'resources' %}bg-blue-100 dark:bg-blue-200/80 text-blue-600 dark:text-blue-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Resources">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -571,9 +604,9 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                           <div id="attachment-preview-list" class="flex flex-col"></div>
                                       </div>
                                        <input type="hidden" name="content" id="memo-editor-input" value="">
-                                       <p class="text-[10px] text-[#8e8e8a] text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[9px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
-                                   </div>
-                                   <!-- Slash Commands Dropdown -->
+<p class="text-xs text-muted-fg text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
+                                    </div>
+                                    <!-- Slash Commands Dropdown -->
                                    <div id="slash-menu" class="hidden bg-card border border-border rounded-lg shadow-lg py-1 min-w-[260px] z-50"></div>
                                    <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
@@ -603,11 +636,11 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                       <span>🎤</span><span id="record-label">Record Audio</span>
                                                   </button>
                                                    <button type="button" onclick="toggleLinkMemo()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                                                       <span>🔗</span> Link Memo
+                                                       <span>🔗</span> Link Note
                                                    </button>
                                                </div>
                                                <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
-                                                   <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search memos..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
+                                                   <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search notes..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
                                                    <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
                                                </div>
             {% if has_password %}
@@ -699,7 +732,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                         {% endif %}
                         {% if not memo_groups %}
                         <div class="text-center py-16">
-                            <p class="text-muted-fg text-sm">No memos yet. Write your first memo above!</p>
+                            <p class="text-muted-fg text-sm">No notes yet. Write your first note above!</p>
                         </div>
                         {% endif %}
                         {% endif %}
@@ -1153,12 +1186,12 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         if (!activeId) return;
         document.querySelectorAll('#notes-panel [data-note-id]').forEach(function(el) {
             el.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
-            el.querySelector('.note-title')?.classList.remove('text-blue-600', 'dark:text-blue-400');
+            el.querySelector('.note-title')?.classList.remove('text-blue-600', 'dark:text-blue-600', 'font-semibold');
         });
         var selected = document.querySelector('#notes-panel [data-note-id="' + activeId + '"]');
         if (selected) {
             selected.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
-            selected.querySelector('.note-title')?.classList.add('text-blue-600', 'dark:text-blue-400');
+            selected.querySelector('.note-title')?.classList.add('text-blue-600', 'dark:text-blue-600', 'font-semibold');
         }
     }
     function openNote(id) {
@@ -1229,7 +1262,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         editEl.innerHTML = '';
     }
     function deleteMemo(id) {
-        if (!confirm('Delete this memo?')) return;
+        if (!confirm('Delete this note?')) return;
         var btn = document.querySelector('#memo-' + id + ' button[onclick*="deleteMemo"]');
         if (btn) btn.disabled = true;
         htmx.ajax('DELETE', '/memos/' + id, { target: '#memo-' + id, swap: 'outerHTML' });
@@ -1463,7 +1496,7 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
     </div>
     <!-- Search -->
     <div class="px-3 pt-3 pb-2 flex-shrink-0">
-        <input type="text" name="q" placeholder="Search memos..."
+        <input type="text" name="q" placeholder="Search notes..."
             hx-get="/search"
             hx-target="#timeline"
             hx-swap="innerHTML"
@@ -1479,7 +1512,7 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
         </div>
         <div class="grid grid-cols-7 gap-0.5">
             <!-- Day headers -->
-            <div class="col-span-7 grid grid-cols-7 text-center text-[10px] text-muted-fg font-medium mb-0.5">
+            <div class="col-span-7 grid grid-cols-7 text-center text-xs text-muted-fg font-medium mb-0.5">
                 <span class="py-0.5">Mon</span><span class="py-0.5">Tue</span><span class="py-0.5">Wed</span><span class="py-0.5">Thu</span><span class="py-0.5">Fri</span><span class="py-0.5">Sat</span><span class="py-0.5">Sun</span>
             </div>
             {% for week in calendar_weeks %}
@@ -1490,8 +1523,8 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
                     hx-target="#timeline"
                     hx-swap="innerHTML"
                     class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
-                        {% if day.has_memos %} bg-blue-500/70 dark:bg-blue-400/50 text-white dark:text-white font-medium hover:bg-blue-500 dark:hover:bg-blue-400/70
-                        {% elif day.is_today %} bg-blue-500 dark:bg-blue-400 text-white font-semibold hover:bg-blue-600 dark:hover:bg-blue-300 shadow-sm
+                        {% if day.has_memos %} text-blue-600 dark:text-blue-800 bg-blue-50 dark:bg-blue-200/80 font-medium hover:bg-blue-100 dark:hover:bg-blue-300/80
+                        {% elif day.is_today %} bg-blue-600 dark:bg-blue-200/90 text-white dark:text-blue-800 font-semibold shadow-sm
                         {% else %} text-muted-fg hover:bg-[#e5e5e0] dark:hover:bg-[#3e4045]{% endif %}">
                     {% if day.is_today %}
                     <span class="relative z-10">{{ day.day }}</span>
@@ -1507,10 +1540,6 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
             </div>
             {% endfor %}
         </div>
-        <button hx-get="/memos-feed" hx-target="#timeline" hx-swap="innerHTML"
-            class="mt-2 w-full text-center text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 py-1 transition-colors rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20">
-            Show all memos
-        </button>
     </div>
 
     <!-- Tags -->
@@ -1524,11 +1553,11 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
                     hx-swap="innerHTML"
                     class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
                     #{{ tag.name }}
-                    <span class="text-[10px] text-blue-400 dark:text-blue-500">{{ tag.count }}</span>
+                    <span class="text-xs text-blue-400 dark:text-blue-500">{{ tag.count }}</span>
                 </button>
                 {% endfor %}
                 {% if not tags %}
-                <p class="text-xs text-muted-fg">No tags yet. Use #tag in your memos.</p>
+                <p class="text-xs text-muted-fg">No tags yet. Use #tag in your notes.</p>
                 {% endif %}
             </div>
             <p class="text-xs text-muted-fg text-center mt-4">MinimaMemosa · Write freely</p>
@@ -1567,7 +1596,7 @@ const MEMOS_FEED_TEMPLATE: &str = r##"{% for group in memo_groups %}
 {% endif %}
 {% if not memo_groups and offset == 0 %}
 <div class="text-center py-16">
-    <p class="text-muted-fg text-sm">No memos found</p>
+    <p class="text-muted-fg text-sm">No notes found</p>
 </div>
 {% endif %}"##;
 
@@ -1644,7 +1673,7 @@ const SHARE_PASSWORD_TEMPLATE: &str = r##"{% extends "base" %}
 const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
 {% for note in notes %}
 <div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}" onclick="openNote({{ note.id }})"
-    class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30">
+    class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between">
     <div class="flex-1 min-w-0">
         <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
             {{ note.title }}
@@ -1654,14 +1683,14 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
             <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
             {% endif %}
         </p>
-        <p class="text-[10px] text-muted-fg mt-0.5">{{ note.created_at }}</p>
+        <p class="text-xs text-muted-fg mt-0.5">{{ note.created_at }}</p>
         {% if note.tags %}
         <div class="flex flex-wrap gap-1 mt-1.5">
             {% for tag in note.tags %}
-            <span class="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">#{{ tag }}</span>
+            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-500">#{{ tag }}</span>
             {% endfor %}
         </div>
-        {% endif %}
+                 {% endif %}
     </div>
     {% if note.first_image_id %}
     <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
@@ -1695,7 +1724,7 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
         {% if notes %}
             {% for note in notes %}
             <div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}" onclick="openNote({{ note.id }})"
-                class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30">
+                class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between">
                 <div class="flex-1 min-w-0">
                     <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
                         {{ note.title }}
@@ -1705,11 +1734,11 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
                         <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
                         {% endif %}
                     </p>
-                    <p class="text-[10px] text-muted-fg mt-0.5">{{ note.created_at }}</p>
+                    <p class="text-xs text-muted-fg mt-0.5">{{ note.created_at }}</p>
                     {% if note.tags %}
                     <div class="flex flex-wrap gap-1 mt-1.5">
                         {% for tag in note.tags %}
-                        <span class="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">#{{ tag }}</span>
+                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-500">#{{ tag }}</span>
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -1786,7 +1815,7 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
         {% if tags and tags|length > 0 %}
         <div class="flex flex-wrap gap-1 mt-2">
             {% for tag in tags %}
-            <span class="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-500">
                 #{{ tag }}
             </span>
             {% endfor %}
@@ -1816,7 +1845,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             <div id="attachment-preview-list" class="flex flex-col"></div>
         </div>
         <input type="hidden" name="content" id="memo-edit-input-{{ id }}" value="{{ content|e }}">
-        <p class="text-[10px] text-[#8e8e8a] text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[9px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
+        <p class="text-xs text-muted-fg text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
     </div>
     <script>
     (function() {
@@ -2030,7 +2059,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     </button>
                 </div>
                 <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
-                    <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search memos..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
+                    <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search notes..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
                     <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
                 </div>
             </div>
@@ -2046,7 +2075,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     </button>
                     <button type="button" data-vis-value="protected" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
-                        Protected{% if has_password %} <span class="text-[9px] text-green-600 dark:text-green-400 ml-1">✓ Set</span>{% endif %}
+                        Protected{% if has_password %} <span class="text-[10px] text-green-600 dark:text-green-400 ml-1">✓ Set</span>{% endif %}
                     </button>
                     <button type="button" data-vis-value="private" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -2098,7 +2127,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
     {% endif %}
     <div class="flex-1 min-w-0 cursor-pointer" onclick="insertContenteditable('{% if res.is_image %}![{{ res.original_name }}](/resources/{{ res.id }}){% else %}[{{ res.original_name }}](/resources/{{ res.id }}){% endif %}')">
         <p class="text-xs font-medium text-foreground truncate">{{ res.original_name }}</p>
-        <p class="text-[10px] text-[#8e8e8a]">{{ res.size_str }}</p>
+        <p class="text-xs text-muted-fg">{{ res.size_str }}</p>
     </div>
     <button onclick="if(confirm('Delete this resource?')){var e=this;fetch('/resources/{{ res.id }}',{method:'DELETE'}).then(function(r){if(r.ok){e.closest('.group\\/res').remove();refreshResourcesPanel();htmx.trigger('body','memoUpdated')}})}"
         class="p-1 rounded-md text-[#8e8e8a] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
@@ -2139,7 +2168,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
     </div>
     <div class="flex-1 overflow-y-auto p-2 space-y-1" id="resources-list">
         {% if resources %}
-            <p class="text-[10px] text-muted-fg px-2 pb-1.5 border-b border-border/30 mb-1">Click a resource to add it to your note.</p>
+            <p class="text-xs text-muted-fg px-2 pb-1.5 border-b border-border/30 mb-1">Click a resource to add it to your note.</p>
             {% for res in resources %}
             <div class="flex items-center gap-1.5 p-2 rounded-lg hover:bg-muted transition-colors group/res">
                 <input type="checkbox" class="res-checkbox rounded border-border/60" value="{{ res.id }}" onchange="updateBulkActions()">
@@ -2156,7 +2185,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
                 {% endif %}
                 <div class="flex-1 min-w-0 cursor-pointer" onclick="insertContenteditable('{% if res.is_image %}![{{ res.original_name }}](/resources/{{ res.id }}){% else %}[{{ res.original_name }}](/resources/{{ res.id }}){% endif %}')">
                     <p class="text-xs font-medium text-foreground truncate">{{ res.original_name }}</p>
-                    <p class="text-[10px] text-[#8e8e8a]">{{ res.size_str }}</p>
+                    <p class="text-xs text-muted-fg">{{ res.size_str }}</p>
                 </div>
                 <button onclick="if(confirm('Delete this resource?')){var e=this;fetch('/resources/{{ res.id }}',{method:'DELETE'}).then(function(r){if(r.ok){e.closest('.group\\/res').remove();refreshResourcesPanel();htmx.trigger('body','memoUpdated')}})}"
                     class="p-1 rounded-md text-[#8e8e8a] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
