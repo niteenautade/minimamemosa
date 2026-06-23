@@ -30,7 +30,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
                         'muted-fg': 'var(--muted-fg)',
                         sidebar: 'var(--sidebar)',
                         'sidebar-fg': 'var(--sidebar-fg)',
-                        blue: {
+                        accent: {
                             50: 'var(--a50)',
                             100: 'var(--a100)',
                             200: 'var(--a200)',
@@ -235,7 +235,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
 <div id="share-modal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden" style="background:rgba(0,0,0,0.5)">
     <div class="bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-sm mx-4" onclick="event.stopPropagation()">
         <div class="text-center mb-4">
-            <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 mb-2">
+            <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-400 mb-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
             </div>
             <h3 class="text-lg font-semibold text-foreground" id="share-modal-title">Share Note</h3>
@@ -244,7 +244,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         <div class="space-y-3">
             <div class="flex items-center gap-2 p-2 bg-muted rounded-lg border border-border">
                 <span class="text-xs text-muted-fg truncate" id="share-link-display"></span>
-                <button onclick="copyShareLink()" class="ml-auto shrink-0 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors">Copy</button>
+                <button onclick="copyShareLink()" class="ml-auto shrink-0 px-2 py-1 text-xs font-medium text-white bg-accent-600 hover:bg-accent-700 rounded transition-colors">Copy</button>
             </div>
         </div>
         <div class="flex mt-4">
@@ -268,12 +268,12 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
             <div>
                 <label for="vis-pwd-input" class="block text-sm font-medium mb-1">Password</label>
                 <input type="password" id="vis-pwd-input" placeholder="Enter a password..."
-                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm">
             </div>
             <div>
                 <label for="vis-pwd-confirm" class="block text-sm font-medium mb-1">Confirm Password</label>
                 <input type="password" id="vis-pwd-confirm" placeholder="Confirm password..."
-                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm">
             </div>
             <p id="vis-pwd-error" class="text-red-500 text-xs hidden"></p>
         </div>
@@ -281,7 +281,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
             <button onclick="closeVisPwdModal()"
                 class="flex-1 px-3 py-2 text-sm font-medium text-muted-fg hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors">Cancel</button>
             <button onclick="confirmVisPwd()"
-                class="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Set Password</button>
+                class="flex-1 px-3 py-2 text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 rounded-lg transition-colors">Set Password</button>
         </div>
     </div>
 </div>
@@ -300,7 +300,7 @@ function showToast(msg, type) {
     } else if (type === 'success') {
         t.classList.add('bg-green-600', 'text-white');
     } else {
-        t.classList.add('bg-gray-800', 'dark:bg-gray-200', 'text-white', 'dark:text-gray-900');
+        t.classList.add('bg-card', 'dark:bg-card', 'text-foreground', 'dark:text-foreground');
     }
     t.classList.remove('hidden', 'opacity-0', 'translate-y-2');
     // force reflow
@@ -382,6 +382,8 @@ function confirmVisPwd() {
     closeVisPwdModal();
 }
 
+function debounce(fn, ms) { var t; return function() { var ctx=this, args=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(ctx, args) }, ms) } }
+var debouncedFilterSidebar = debounce(function(q) { filterNotesSidebar(q) }, 80);
 function filterNotesSidebar(q) {
     var container = document.getElementById('notes-list-container');
     if (!container) return;
@@ -421,23 +423,23 @@ const LOGIN_TEMPLATE: &str = r#"{% extends "base" %}
             <div>
                 <label for="username" class="block text-sm font-medium mb-1">Username</label>
                 <input type="text" name="username" id="username" required
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500">
             </div>
             <div>
                 <label for="password" class="block text-sm font-medium mb-1">Password</label>
                 <input type="password" name="password" id="password" required
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500">
             </div>
             {% if error %}
             <p class="text-red-500 text-sm">{{ error }}</p>
             {% endif %}
             <button type="submit"
-                class="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                class="w-full py-2 px-4 bg-accent-600 text-white rounded-lg hover:bg-accent-700 focus:outline-none focus:ring-2 focus:ring-accent-500">
                 Sign In
             </button>
         </form>
-        <p class="text-center text-sm text-gray-500 mt-4">
-            Don't have an account? <a href="/register" class="text-blue-600 hover:underline">Register</a>
+        <p class="text-center text-sm text-muted-fg mt-4">
+            Don't have an account? <a href="/register" class="text-accent-600 hover:underline">Register</a>
         </p>
     </div>
 </div>
@@ -452,33 +454,33 @@ const REGISTER_TEMPLATE: &str = r#"{% extends "base" %}
             <div>
                 <label for="username" class="block text-sm font-medium mb-1">Username</label>
                 <input type="text" name="username" id="username" required
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500">
             </div>
             <div>
                 <label for="password" class="block text-sm font-medium mb-1">Password</label>
                 <input type="password" name="password" id="password" required
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500">
             </div>
             <div class="space-y-2">
-                <div class="flex items-center justify-center p-2 bg-white dark:bg-gray-800 rounded-lg border border-border">
+                <div class="flex items-center justify-center p-2 bg-card dark:bg-card rounded-lg border border-border">
                     <img src="{{ captcha_image }}" alt="Captcha" class="h-16 object-contain" />
                 </div>
                 <div>
                     <label for="captcha_answer" class="block text-sm font-medium mb-1">Verify Captcha Code</label>
                     <input type="text" name="captcha_answer" id="captcha_answer" required placeholder="Enter code above"
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500">
                 </div>
             </div>
             {% if error %}
             <p class="text-red-500 text-sm">{{ error }}</p>
             {% endif %}
             <button type="submit"
-                class="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                class="w-full py-2 px-4 bg-accent-600 text-white rounded-lg hover:bg-accent-700 focus:outline-none focus:ring-2 focus:ring-accent-500">
                 Register
             </button>
         </form>
-        <p class="text-center text-sm text-gray-500 mt-4">
-            Already have an account? <a href="/login" class="text-blue-600 hover:underline">Sign in</a>
+        <p class="text-center text-sm text-muted-fg mt-4">
+            Already have an account? <a href="/login" class="text-accent-600 hover:underline">Sign in</a>
         </p>
     </div>
 </div>
@@ -488,7 +490,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 {% block content %}
 <div class="flex flex-col h-screen overflow-hidden">
     <!-- Header -->
-    <header class="flex items-center justify-between px-6 py-2.5 border-b border-border bg-white dark:bg-gray-900 flex-shrink-0 w-full">
+    <header class="flex items-center justify-between px-6 py-2.5 border-b border-border bg-card dark:bg-card flex-shrink-0 w-full">
         <div class="flex items-center gap-3">
             <span class="text-sm font-semibold text-card-fg">MinimaMemosa</span>
         </div>
@@ -500,10 +502,10 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                 </svg>
             </button>
             <div class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted cursor-pointer">
-                <div class="avatar-initials avatar-initials-sm bg-blue-500 text-white">{{ avatar }}</div>
+                <div class="avatar-initials avatar-initials-sm bg-accent-500 text-white">{{ avatar }}</div>
                 <span class="text-sm text-card-fg">{{ username }}</span>
             </div>
-            <a href="/logout" class="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1" title="Logout">
+            <a href="/logout" class="text-xs text-muted-fg hover:text-red-500 transition-colors ml-1" title="Logout">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                 </svg>
@@ -516,7 +518,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <div class="w-14 flex-shrink-0 bg-card border-r border-border flex flex-col items-center py-3 gap-2 z-20">
         <a id="icon-timeline"
             href="/app/timeline"
-            class="p-2.5 rounded-xl {% if active_panel == 'timeline' %}bg-blue-100 dark:bg-blue-200/80 text-blue-600 dark:text-blue-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
+            class="p-2.5 rounded-xl {% if active_panel == 'timeline' %}bg-accent-100 dark:bg-accent-200/80 text-accent-600 dark:text-accent-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Timeline">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/>
@@ -526,7 +528,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         </a>
         <a id="icon-notes"
             href="/app/notes"
-            class="p-2.5 rounded-xl {% if active_panel == 'notes' %}bg-blue-100 dark:bg-blue-200/80 text-blue-600 dark:text-blue-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
+            class="p-2.5 rounded-xl {% if active_panel == 'notes' %}bg-accent-100 dark:bg-accent-200/80 text-accent-600 dark:text-accent-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Notes">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="2"/>
@@ -537,7 +539,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         </a>
         <a id="icon-resources"
             href="/app/resources"
-            class="p-2.5 rounded-xl {% if active_panel == 'resources' %}bg-blue-100 dark:bg-blue-200/80 text-blue-600 dark:text-blue-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
+            class="p-2.5 rounded-xl {% if active_panel == 'resources' %}bg-accent-100 dark:bg-accent-200/80 text-accent-600 dark:text-accent-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Resources">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -582,15 +584,15 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                 <div class="max-w-2xl mx-auto">
                      <!-- Notion-style Editor -->
                      <div class="max-w-2xl mx-auto mb-8">
-                         <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                          <div class="bg-card dark:bg-card rounded-lg border border-border shadow-sm">
                               <form id="memo-form" hx-post="/memos"
                                     hx-swap="afterbegin"
                                     hx-target="#timeline"
                                     hx-on::after-request="if(event.detail.successful){resetEditor();htmx.trigger('body','memoUpdated')}"
                                     class="memo-editor relative"
-                                    ondragover="event.preventDefault(); this.classList.add('border-blue-500')"
-                                    ondragleave="event.preventDefault(); this.classList.remove('border-blue-500')"
-                                    ondrop="event.preventDefault(); this.classList.remove('border-blue-500'); handleDrop(event)"
+                                    ondragover="event.preventDefault(); this.classList.add('border-accent-500')"
+                                    ondragleave="event.preventDefault(); this.classList.remove('border-accent-500')"
+                                    ondrop="event.preventDefault(); this.classList.remove('border-accent-500'); handleDrop(event)"
                                     onsubmit="document.getElementById('memo-editor-input').value = getTiptapMarkdown();">
                                   <div class="px-8 pt-6 pb-2 relative">
                                        <div id="memo-editor"
@@ -610,7 +612,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                    <div id="slash-menu" class="hidden bg-card border border-border rounded-lg shadow-lg py-1 min-w-[260px] z-50"></div>
                                    <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
-                                  <div class="flex items-center justify-between px-8 py-3 border-t border-border bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
+                                   <div class="flex items-center justify-between px-8 py-3 border-t border-border bg-muted dark:bg-muted rounded-b-lg">
                                       <div class="flex items-center gap-1">
                                            <!-- Emoji Picker -->
                                            <div class="visibility-dropdown relative">
@@ -640,7 +642,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                    </button>
                                                </div>
                                                <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
-                                                   <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search notes..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
+                                                   <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search notes..." oninput="debouncedLinkSearch(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-accent-500"></div>
                                                    <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
                                                </div>
             {% if has_password %}
@@ -648,7 +650,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                 <div class="border border-dashed border-border rounded-lg p-3">
                     <p class="text-xs text-muted-fg mb-2">This note is password-protected.</p>
                     <button type="button" onclick="showVisPwdModal(true)"
-                        class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">Change Password</button>
+                        class="text-xs font-medium text-accent-600 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300 transition-colors">Change Password</button>
                 </div>
             </div>
             {% endif %}
@@ -678,7 +680,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                           <span class="text-xs text-muted-fg">Press <kbd class="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> for commands</span>
                                       </div>
                                       <button type="submit" id="save-memo-btn" disabled
-                                          class="py-1.5 px-5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
+                                          class="py-1.5 px-5 bg-accent-600 hover:bg-accent-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent-600">
                                           Save
                                       </button>
                                   </div>
@@ -706,7 +708,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                             <div class="flex items-center gap-2 mb-3">
                                 <span class="text-xs font-medium text-muted-fg uppercase tracking-wider">{{ group.label }}</span>
                                 <span class="text-xs text-muted-fg">{{ group.date }}</span>
-                                <div class="flex-1 border-t border-gray-100 dark:border-gray-700"></div>
+                                <div class="flex-1 border-t border-border"></div>
                                 <span class="text-xs text-muted-fg font-mono">{{ group.memos|length }}</span>
                             </div>
                             <div class="space-y-2">
@@ -976,6 +978,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             setTimeout(function() { document.getElementById('link-memo-search').focus(); }, 100);
         } else { dd.classList.add('hidden'); }
     }
+var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     function searchLinkMemos(query) {
         if (!query || query.length < 1) { document.getElementById('link-memo-results').innerHTML = '<div class="px-3 py-2 text-xs text-muted-fg">Type to search...</div>'; return; }
         fetch('/memos-json?q=' + encodeURIComponent(query))
@@ -1185,13 +1188,13 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         var activeId = timeline ? timeline.getAttribute('data-active-note-id') : null;
         if (!activeId) return;
         document.querySelectorAll('#notes-panel [data-note-id]').forEach(function(el) {
-            el.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
-            el.querySelector('.note-title')?.classList.remove('text-blue-600', 'dark:text-blue-600', 'font-semibold');
+            el.classList.remove('bg-accent-50', 'dark:bg-accent-900/20');
+            el.querySelector('.note-title')?.classList.remove('text-accent-600', 'dark:text-accent-600', 'font-semibold');
         });
         var selected = document.querySelector('#notes-panel [data-note-id="' + activeId + '"]');
         if (selected) {
-            selected.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
-            selected.querySelector('.note-title')?.classList.add('text-blue-600', 'dark:text-blue-600', 'font-semibold');
+            selected.classList.add('bg-accent-50', 'dark:bg-accent-900/20');
+            selected.querySelector('.note-title')?.classList.add('text-accent-600', 'dark:text-accent-600', 'font-semibold');
         }
     }
     function openNote(id) {
@@ -1502,7 +1505,7 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
             hx-swap="innerHTML"
             hx-trigger="keyup changed delay:400ms, search"
             hx-on::before-request="if (this.value === '') { event.detail.pathInfo.requestPath = '/memos-feed' }"
-            class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+            class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all" />
     </div>
 
     <!-- Calendar -->
@@ -1523,9 +1526,9 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
                     hx-target="#timeline"
                     hx-swap="innerHTML"
                     class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
-                        {% if day.has_memos %} text-blue-600 dark:text-blue-800 bg-blue-50 dark:bg-blue-200/80 font-medium hover:bg-blue-100 dark:hover:bg-blue-300/80
-                        {% elif day.is_today %} bg-blue-600 dark:bg-blue-200/90 text-white dark:text-blue-800 font-semibold shadow-sm
-                        {% else %} text-muted-fg hover:bg-[#e5e5e0] dark:hover:bg-[#3e4045]{% endif %}">
+                        {% if day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
+                        {% elif day.is_today %} bg-accent-600 dark:bg-accent-200/90 text-white dark:text-accent-800 font-semibold shadow-sm
+                        {% else %} text-muted-fg hover:bg-muted dark:hover:bg-muted{% endif %}">
                     {% if day.is_today %}
                     <span class="relative z-10">{{ day.day }}</span>
                     <span class="absolute inset-0.5 rounded-lg ring-1 ring-inset ring-white/30"></span>
@@ -1551,9 +1554,9 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
                 <button hx-get="/search?tag={{ tag.name }}"
                     hx-target="#timeline"
                     hx-swap="innerHTML"
-                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-accent-50 dark:bg-accent-900/30 text-accent-600 dark:text-accent-400 hover:bg-accent-100 dark:hover:bg-accent-900/50 transition-colors">
                     #{{ tag.name }}
-                    <span class="text-xs text-blue-400 dark:text-blue-500">{{ tag.count }}</span>
+                    <span class="text-xs text-accent-400 dark:text-accent-500">{{ tag.count }}</span>
                 </button>
                 {% endfor %}
                 {% if not tags %}
@@ -1570,7 +1573,7 @@ const MEMOS_FEED_TEMPLATE: &str = r##"{% for group in memo_groups %}
     <div class="flex items-center gap-2 mb-3">
         <span class="text-xs font-medium text-muted-fg uppercase tracking-wider">{{ group.label }}</span>
         <span class="text-xs text-muted-fg">{{ group.date }}</span>
-        <div class="flex-1 border-t border-gray-100 dark:border-gray-700"></div>
+        <div class="flex-1 border-t border-border"></div>
         <span class="text-xs text-muted-fg font-mono">{{ group.memos|length }}</span>
     </div>
     <div class="space-y-2">
@@ -1605,7 +1608,7 @@ const SHARE_NOTE_TEMPLATE: &str = r##"{% extends "base" %}
 <div class="flex items-center justify-center min-h-screen py-10">
     <div class="w-full max-w-2xl mx-4 bg-card rounded-xl border border-border shadow-md p-6">
         <div class="flex items-center gap-2 mb-4 border-b border-border pb-3">
-            <div class="avatar-initials bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+            <div class="avatar-initials bg-accent-100 text-accent-800 dark:bg-accent-900/30 dark:text-accent-400">
                 {{ avatar }}
             </div>
             <div>
@@ -1656,13 +1659,13 @@ const SHARE_PASSWORD_TEMPLATE: &str = r##"{% extends "base" %}
             <div>
                 <label for="password" class="block text-sm font-medium mb-1">Password</label>
                 <input type="password" name="password" id="password" required autofocus
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-accent-500">
             </div>
             {% if error %}
             <p class="text-red-500 text-sm">{{ error }}</p>
             {% endif %}
             <button type="submit"
-                class="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium">
+                class="w-full py-2 px-4 bg-accent-600 text-white rounded-lg hover:bg-accent-700 focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm font-medium">
                 Unlock Note
             </button>
         </form>
@@ -1687,13 +1690,13 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
         {% if note.tags %}
         <div class="flex flex-wrap gap-1 mt-1.5">
             {% for tag in note.tags %}
-            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-500">#{{ tag }}</span>
+            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-500">#{{ tag }}</span>
             {% endfor %}
         </div>
                  {% endif %}
     </div>
     {% if note.first_image_id %}
-    <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
+    <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-muted dark:bg-muted">
         <img src="/resources/{{ note.first_image_id }}" class="w-full h-full object-cover" loading="lazy">
     </div>
     {% endif %}
@@ -1717,8 +1720,8 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
             hx-swap="innerHTML"
             hx-trigger="keyup changed delay:400ms, search"
             hx-on::before-request="if (this.value === '') { event.detail.pathInfo.requestPath = '/memos-feed' }"
-            oninput="filterNotesSidebar(this.value)"
-            class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+            oninput="debouncedFilterSidebar(this.value)"
+            class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all" />
     </div>
     <div class="flex-1 overflow-y-auto p-2 space-y-1" id="notes-list-container">
         {% if notes %}
@@ -1738,20 +1741,20 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
                     {% if note.tags %}
                     <div class="flex flex-wrap gap-1 mt-1.5">
                         {% for tag in note.tags %}
-                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-500">#{{ tag }}</span>
+                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-500">#{{ tag }}</span>
                         {% endfor %}
                     </div>
                     {% endif %}
                 </div>
                 {% if note.first_image_id %}
-                <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
+                <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-muted dark:bg-muted">
                     <img src="/resources/{{ note.first_image_id }}" class="w-full h-full object-cover" loading="lazy">
                 </div>
                 {% endif %}
             </div>
             {% endfor %}
         {% else %}
-            <p class="text-sm text-gray-400 p-3 text-center">No notes yet</p>
+            <p class="text-sm text-muted-fg p-3 text-center">No notes yet</p>
         {% endif %}
         {% if next_offset %}
         <div id="sentinel-notes-{{ offset }}" class="h-4"
@@ -1765,7 +1768,7 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
 
 const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
     <a href="/app/timeline"
-        class="flex items-center gap-1.5 text-sm text-muted-fg hover:text-gray-700 dark:hover:text-gray-200 mb-4 transition-colors">
+        class="flex items-center gap-1.5 text-sm text-muted-fg hover:text-foreground dark:hover:text-foreground mb-4 transition-colors">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -1773,7 +1776,7 @@ const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
     </a>
     <div class="memo-content">{{ content_html|safe }}</div>
     
-    <p class="text-xs text-gray-400 mt-4 pt-3 border-t border-border">{{ created_at }}</p>
+    <p class="text-xs text-muted-fg mt-4 pt-3 border-t border-border">{{ created_at }}</p>
 </div>"#;
 
 const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow group/memo">
@@ -1794,7 +1797,7 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
             </div>
             <div class="ml-auto flex items-center gap-1 opacity-0 group-hover/memo:opacity-100 transition-opacity">
                 <button onclick="shareNote({{ id }}, '{{ visibility }}')"
-                    class="p-1 rounded-md text-muted-fg hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Share">
+                    class="p-1 rounded-md text-muted-fg hover:text-accent-500 hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-colors" title="Share">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
                 </button>
@@ -1805,7 +1808,7 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
                     </svg>
                 </button>
                 <button onclick="deleteMemo({{ id }})"
-                    class="p-1 rounded-md text-[#8e8e8a] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete">
+                    class="p-1 rounded-md text-muted-fg hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                 </button>
             </div>
@@ -1815,7 +1818,7 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
         {% if tags and tags|length > 0 %}
         <div class="flex flex-wrap gap-1 mt-2">
             {% for tag in tags %}
-            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-500">
+            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-500">
                 #{{ tag }}
             </span>
             {% endfor %}
@@ -1830,9 +1833,9 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
       hx-target="#memo-{{ id }}"
       hx-swap="outerHTML"
       hx-on::after-request="if(event.detail.successful){htmx.trigger('body','memoUpdated')}"
-      ondragover="event.preventDefault(); this.classList.add('border-blue-500')"
-      ondragleave="event.preventDefault(); this.classList.remove('border-blue-500')"
-      ondrop="event.preventDefault(); this.classList.remove('border-blue-500'); handleDrop(event)"
+      ondragover="event.preventDefault(); this.classList.add('border-accent-500')"
+      ondragleave="event.preventDefault(); this.classList.remove('border-accent-500')"
+      ondrop="event.preventDefault(); this.classList.remove('border-accent-500'); handleDrop(event)"
       onsubmit="document.getElementById('memo-edit-input-{{ id }}').value = getTiptapMarkdown();">
     <div class="px-4 pt-3 pb-1 relative">
         <div id="memo-edit-memo-editor-{{ id }}"
@@ -2059,7 +2062,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     </button>
                 </div>
                 <div id="link-memo-dropdown" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 w-[250px]">
-                    <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search notes..." oninput="searchLinkMemos(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"></div>
+                    <div class="p-2"><input type="text" id="link-memo-search" placeholder="Search notes..." oninput="debouncedLinkSearch(this.value)" class="w-full px-2 py-1.5 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-accent-500"></div>
                     <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
                 </div>
             </div>
@@ -2093,7 +2096,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                 Cancel
             </button>
             <button type="submit" id="save-memo-edit-btn-{{ id }}" disabled
-                class="py-1.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
+                class="py-1.5 px-4 bg-accent-600 hover:bg-accent-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent-600">
                 Save
             </button>
         </div>
@@ -2103,7 +2106,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
         <div class="border border-dashed border-border rounded-lg p-3">
             <p class="text-xs text-muted-fg mb-2">This note is password-protected.</p>
             <button type="button" onclick="showVisPwdModal(true)"
-                class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">Change Password</button>
+                class="text-xs font-medium text-accent-600 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300 transition-colors">Change Password</button>
         </div>
     </div>
     {% endif %}
@@ -2115,12 +2118,12 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
 <div class="flex items-center gap-1.5 p-2 rounded-lg hover:bg-muted transition-colors group/res">
     <input type="checkbox" class="res-checkbox rounded border-border/60" value="{{ res.id }}" onchange="updateBulkActions()">
     {% if res.is_image %}
-    <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
+    <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted dark:bg-muted">
         <img src="/resources/{{ res.id }}" class="w-full h-full object-cover" loading="lazy">
     </div>
     {% else %}
-    <div class="w-10 h-10 rounded-lg flex-shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045] flex items-center justify-center">
-        <svg class="w-5 h-5 text-[#8e8e8a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="w-10 h-10 rounded-lg flex-shrink-0 bg-muted dark:bg-muted flex items-center justify-center">
+        <svg class="w-5 h-5 text-muted-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
         </svg>
     </div>
@@ -2130,7 +2133,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
         <p class="text-xs text-muted-fg">{{ res.size_str }}</p>
     </div>
     <button onclick="if(confirm('Delete this resource?')){var e=this;fetch('/resources/{{ res.id }}',{method:'DELETE'}).then(function(r){if(r.ok){e.closest('.group\\/res').remove();refreshResourcesPanel();htmx.trigger('body','memoUpdated')}})}"
-        class="p-1 rounded-md text-[#8e8e8a] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
+        class="p-1 rounded-md text-muted-fg hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
         </svg>
@@ -2152,7 +2155,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
         <div class="relative">
             <input type="file" multiple id="file-input" class="hidden" onchange="uploadFiles(this.files)">
             <button onclick="document.getElementById('file-input').click()"
-                class="w-full px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors text-center">
+                class="w-full px-3 py-2 text-xs font-medium text-accent-600 dark:text-accent-400 bg-accent-50 dark:bg-accent-900/20 hover:bg-accent-100 dark:hover:bg-accent-900/30 rounded-lg transition-colors text-center">
                 Upload Files
             </button>
         </div>
@@ -2173,12 +2176,12 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
             <div class="flex items-center gap-1.5 p-2 rounded-lg hover:bg-muted transition-colors group/res">
                 <input type="checkbox" class="res-checkbox rounded border-border/60" value="{{ res.id }}" onchange="updateBulkActions()">
                 {% if res.is_image %}
-                <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045]">
+                <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted dark:bg-muted">
                     <img src="/resources/{{ res.id }}" class="w-full h-full object-cover" loading="lazy">
                 </div>
                 {% else %}
-                <div class="w-10 h-10 rounded-lg flex-shrink-0 bg-[#f0f0eb] dark:bg-[#3e4045] flex items-center justify-center">
-                    <svg class="w-5 h-5 text-[#8e8e8a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-10 h-10 rounded-lg flex-shrink-0 bg-muted dark:bg-muted flex items-center justify-center">
+                    <svg class="w-5 h-5 text-muted-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                     </svg>
                 </div>
@@ -2188,7 +2191,7 @@ const RESOURCES_PANEL_TEMPLATE: &str = r##"{% if partial %}
                     <p class="text-xs text-muted-fg">{{ res.size_str }}</p>
                 </div>
                 <button onclick="if(confirm('Delete this resource?')){var e=this;fetch('/resources/{{ res.id }}',{method:'DELETE'}).then(function(r){if(r.ok){e.closest('.group\\/res').remove();refreshResourcesPanel();htmx.trigger('body','memoUpdated')}})}"
-                    class="p-1 rounded-md text-[#8e8e8a] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
+                    class="p-1 rounded-md text-muted-fg hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                     </svg>
