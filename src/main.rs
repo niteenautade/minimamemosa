@@ -633,6 +633,43 @@ async fn post_share_note(
     }
 }
 
+#[derive(serde::Deserialize)]
+struct SharePasswordJson {
+    password: Option<String>,
+}
+
+async fn put_share_note(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+    Json(body): Json<SharePasswordJson>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Unauthorized"}))).into_response(),
+    };
+
+    let _memo = match state.db.get_memo_by_id(id, user_id) {
+        Ok(Some(m)) => m,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+    };
+
+    let password = match body.password.as_deref().filter(|p| p.len() >= 4) {
+        Some(pwd) => pwd.to_string(),
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Password must be at least 4 characters"}))).into_response(),
+    };
+
+    let password_hash = match auth::hash_password(&password) {
+        Ok(h) => h,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to hash password"}))).into_response(),
+    };
+
+    match state.db.update_memo_visibility(id, user_id, "protected", Some(&password_hash)) {
+        Ok(()) => (StatusCode::OK, Json(json!({"url": format!("/share/{}", id)}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update note"}))).into_response(),
+    }
+}
+
 async fn get_logout() -> impl IntoResponse {
     let headers = logout_cookie();
     (headers, Redirect::to("/login"))
@@ -1169,6 +1206,10 @@ async fn get_notes_panel(
         let (title, _) = extract_title(content);
         let tags = extract_tags(content);
         let first_image_id = extract_first_image_id(content);
+        let search_text = {
+            let s = strip_html(content);
+            if s.len() > 500 { s[..500].to_string() } else { s }
+        };
         let human_date = match chrono::NaiveDateTime::parse_from_str(created_at, "%Y-%m-%d %H:%M:%S") {
             Ok(dt) => dt.format("%b %d, %Y %I:%M %p").to_string(),
             Err(_) => created_at.clone(),
@@ -1180,6 +1221,7 @@ async fn get_notes_panel(
             "first_image_id": first_image_id,
             "created_at": human_date,
             "visibility": visibility,
+            "search_text": search_text,
         })
     }).collect();
     let partial = offset > 0;
@@ -1230,10 +1272,12 @@ async fn get_memo_edit_form(
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     let (id_v, _title, content, visibility, _created_at) = memo;
+    let has_password = state.db.get_memo_has_password(id_v, user_id);
     state.templates.render("memo_edit_form", &json!({
         "id": id_v,
         "content": content,
         "visibility": visibility,
+        "has_password": has_password,
     })).into_response()
 }
 
@@ -1359,6 +1403,7 @@ async fn main() {
         .route("/login", get(get_login).post(post_login))
         .route("/register", get(get_register).post(post_register))
         .route("/share/:id", get(get_share_note).post(post_share_note))
+        .route("/notes/:id/share", put(put_share_note))
         .route("/logout", get(get_logout))
         .route("/app", get(get_app_root))
         .route("/app/timeline", get(get_app_timeline))
@@ -1391,4 +1436,602 @@ async fn main() {
     };
     println!("MinimaMemosa listening on http://{}", addr);
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── render_markdown Tests ──
+
+    #[test]
+    fn test_render_markdown_bold_text() {
+        let result = render_markdown("**bold**");
+        assert!(result.contains("<strong>bold</strong>"));
+    }
+
+    #[test]
+    fn test_render_markdown_italic_text() {
+        let result = render_markdown("*italic*");
+        assert!(result.contains("<em>italic</em>"));
+    }
+
+    #[test]
+    fn test_render_markdown_code_block() {
+        let result = render_markdown("```rust\nfn main() {}\n```");
+        assert!(result.contains("<code"));
+        assert!(result.contains("fn main()"));
+    }
+
+    #[test]
+    fn test_render_markdown_link() {
+        let result = render_markdown("[link](https://example.com)");
+        assert!(result.contains("<a href=\"https://example.com\""));
+    }
+
+    #[test]
+    fn test_render_markdown_image() {
+        let result = render_markdown("![alt](/image.png)");
+        assert!(result.contains("<img src=\"/image.png\" alt=\"alt\""));
+    }
+
+    #[test]
+    fn test_render_markdown_heading() {
+        let result = render_markdown("# Heading");
+        assert!(result.contains("<h1>Heading</h1>"));
+    }
+
+    #[test]
+    fn test_render_markdown_list() {
+        let result = render_markdown("- item\n- item2");
+        assert!(result.contains("<ul>"));
+        assert!(result.contains("<li>item</li>"));
+    }
+
+    #[test]
+    fn test_render_markdown_empty() {
+        let result = render_markdown("");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_render_markdown_paragraph() {
+        let result = render_markdown("Hello world");
+        assert!(result.contains("<p>Hello world</p>"));
+    }
+
+    #[test]
+    fn test_render_markdown_raw_html() {
+        let result = render_markdown("<ins>inserted</ins>");
+        assert!(result.contains("<ins>inserted</ins>"));
+    }
+
+    // ── format_bytes Tests ──
+
+    #[test]
+    fn test_format_bytes_zero() {
+        assert_eq!(format_bytes(0), "0 Bytes");
+    }
+
+    #[test]
+    fn test_format_bytes_bytes() {
+        assert_eq!(format_bytes(500), "500.0 Bytes");
+    }
+
+    #[test]
+    fn test_format_bytes_kb() {
+        assert_eq!(format_bytes(2048), "2.0 KB");
+    }
+
+    #[test]
+    fn test_format_bytes_mb() {
+        assert_eq!(format_bytes(1048576), "1.0 MB");
+    }
+
+    #[test]
+    fn test_format_bytes_gb() {
+        assert_eq!(format_bytes(1073741824), "1.0 GB");
+    }
+
+    #[test]
+    fn test_format_bytes_rounding() {
+        assert_eq!(format_bytes(1536), "1.5 KB");
+    }
+
+    #[test]
+    fn test_format_bytes_one_byte() {
+        assert_eq!(format_bytes(1), "1.0 Bytes");
+    }
+
+    #[test]
+    fn test_format_bytes_negative() {
+        let result = format_bytes(-100);
+        assert!(result.contains("-"));
+    }
+
+    // ── strip_html Tests ──
+
+    #[test]
+    fn test_strip_html_simple() {
+        assert_eq!(strip_html("<p>hello</p>"), "\nhello\n");
+    }
+
+    #[test]
+    fn test_strip_html_no_tags() {
+        assert_eq!(strip_html("hello world"), "hello world");
+    }
+
+    #[test]
+    fn test_strip_html_nested() {
+        assert_eq!(strip_html("<div><p>text</p></div>"), "\ntext\n\n");
+    }
+
+    #[test]
+    fn test_strip_html_br() {
+        let result = strip_html("line1<br>line2");
+        assert_eq!(result, "line1\nline2");
+    }
+
+    #[test]
+    fn test_strip_html_self_closing() {
+        let result = strip_html("<p>a</p><br/><p>b</p>");
+        assert_eq!(result, "\na\n\nb\n");
+    }
+
+    #[test]
+    fn test_strip_html_empty() {
+        assert_eq!(strip_html(""), "");
+    }
+
+    #[test]
+    fn test_strip_html_only_tags() {
+        assert_eq!(strip_html("<p></p>"), "\n\n");
+    }
+
+    // ── extract_title Tests ──
+
+    #[test]
+    fn test_extract_title_plain_text() {
+        let (title, content) = extract_title("Hello world\nsecond line");
+        assert_eq!(title, "Hello world");
+        assert_eq!(content, "Hello world\nsecond line");
+    }
+
+    #[test]
+    fn test_extract_title_markdown_heading() {
+        let (title, _content) = extract_title("## Hello world\ncontent");
+        assert_eq!(title, "Hello world");
+    }
+
+    #[test]
+    fn test_extract_title_with_bold() {
+        let (title, _) = extract_title("**Bold Title**");
+        assert_eq!(title, "Bold Title**");
+    }
+
+    #[test]
+    fn test_extract_title_empty_content() {
+        let (title, content) = extract_title("");
+        assert_eq!(title, "Note");
+        assert_eq!(content, "");
+    }
+
+    #[test]
+    fn test_extract_title_only_newlines() {
+        let (title, _) = extract_title("\n\n\n");
+        assert_eq!(title, "Note");
+    }
+
+    #[test]
+    fn test_extract_title_whitespace() {
+        let (title, _) = extract_title("   ");
+        assert_eq!(title, "Note");
+    }
+
+    #[test]
+    fn test_extract_title_html_content() {
+        let (title, _) = extract_title("<p>Hello world</p>");
+        assert_eq!(title, "Hello world");
+    }
+
+    #[test]
+    fn test_extract_title_special_chars() {
+        let (title, _) = extract_title("___Title___");
+        assert_eq!(title, "Title___");
+    }
+
+    #[test]
+    fn test_extract_title_returns_trimmed_content() {
+        let (_, content) = extract_title("  hello  ");
+        assert_eq!(content, "hello");
+    }
+
+    #[test]
+    fn test_extract_title_multiline_first_line() {
+        let (title, _) = extract_title("First line\nSecond line");
+        assert_eq!(title, "First line");
+    }
+
+    // ── extract_tags Tests ──
+
+    #[test]
+    fn test_extract_tags_simple() {
+        let tags = extract_tags("hello #world this is #rust");
+        assert_eq!(tags, vec!["rust".to_string(), "world".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_no_tags() {
+        let tags: Vec<String> = extract_tags("hello world");
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_extract_tags_duplicate_dedup() {
+        let tags = extract_tags("#rust #rust #RUST");
+        assert_eq!(tags, vec!["rust".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_with_underscore() {
+        let tags = extract_tags("#my_tag");
+        assert_eq!(tags, vec!["my_tag".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_with_hyphen() {
+        let tags = extract_tags("#my-tag");
+        assert_eq!(tags, vec!["my-tag".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_numbers() {
+        let tags = extract_tags("#tag123");
+        assert_eq!(tags, vec!["tag123".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_hash_no_name() {
+        let tags: Vec<String> = extract_tags("#");
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_extract_tags_hash_mid_word() {
+        let tags: Vec<String> = extract_tags("abc#def");
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_extract_tags_parenthesized() {
+        let tags = extract_tags("(#tag)");
+        assert_eq!(tags, vec!["tag".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_empty_content() {
+        let tags: Vec<String> = extract_tags("");
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_extract_tags_sorted() {
+        let tags = extract_tags("#zebra #apple #banana");
+        assert_eq!(tags, vec!["apple", "banana", "zebra"]);
+    }
+
+    // ── relative_time Tests ──
+
+    #[test]
+    fn test_relative_time_seconds() {
+        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let result = relative_time(&now);
+        assert_eq!(result, "0s");
+    }
+
+    #[test]
+    fn test_relative_time_minutes() {
+        let past = (chrono::Utc::now() - chrono::Duration::minutes(5)).format("%Y-%m-%d %H:%M:%S").to_string();
+        let result = relative_time(&past);
+        assert_eq!(result, "5m");
+    }
+
+    #[test]
+    fn test_relative_time_hours() {
+        let past = (chrono::Utc::now() - chrono::Duration::hours(3)).format("%Y-%m-%d %H:%M:%S").to_string();
+        let result = relative_time(&past);
+        assert_eq!(result, "3h");
+    }
+
+    #[test]
+    fn test_relative_time_yesterday() {
+        let past = (chrono::Utc::now() - chrono::Duration::hours(25)).format("%Y-%m-%d %H:%M:%S").to_string();
+        let result = relative_time(&past);
+        assert_eq!(result, "yesterday");
+    }
+
+    #[test]
+    fn test_relative_time_days() {
+        let past = (chrono::Utc::now() - chrono::Duration::days(5)).format("%Y-%m-%d %H:%M:%S").to_string();
+        assert_eq!(relative_time(&past), "5d");
+    }
+
+    #[test]
+    fn test_relative_time_future() {
+        let future = (chrono::Utc::now() + chrono::Duration::hours(1)).format("%Y-%m-%d %H:%M:%S").to_string();
+        let result = relative_time(&future);
+        assert_eq!(result, "0s");
+    }
+
+    #[test]
+    fn test_relative_time_invalid_format() {
+        let result = relative_time("not-a-date");
+        assert_eq!(result, "not-a-date");
+    }
+
+    #[test]
+    fn test_relative_time_empty() {
+        assert_eq!(relative_time(""), "");
+    }
+
+    // ── get_date_label Tests ──
+
+    #[test]
+    fn test_get_date_label_today() {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        assert_eq!(get_date_label(&today), "Today");
+    }
+
+    #[test]
+    fn test_get_date_label_yesterday() {
+        let yesterday = (chrono::Utc::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+        assert_eq!(get_date_label(&yesterday), "Yesterday");
+    }
+
+    #[test]
+    fn test_get_date_label_other_date() {
+        let result = get_date_label("2024-01-15");
+        assert_eq!(result, "Jan 15, 2024");
+    }
+
+    #[test]
+    fn test_get_date_label_invalid() {
+        let result = get_date_label("not-a-date");
+        assert_eq!(result, "not-a-date");
+    }
+
+    #[test]
+    fn test_get_date_label_empty() {
+        assert_eq!(get_date_label(""), "");
+    }
+
+    // ── avatar_char Tests ──
+
+    #[test]
+    fn test_avatar_char_lowercase() {
+        assert_eq!(avatar_char("alice"), "A");
+    }
+
+    #[test]
+    fn test_avatar_char_uppercase() {
+        assert_eq!(avatar_char("Bob"), "B");
+    }
+
+    #[test]
+    fn test_avatar_char_empty() {
+        assert_eq!(avatar_char(""), "?");
+    }
+
+    #[test]
+    fn test_avatar_char_numbers() {
+        assert_eq!(avatar_char("123"), "1");
+    }
+
+    #[test]
+    fn test_avatar_char_unicode() {
+        assert_eq!(avatar_char("ñoño").chars().count(), 1);
+    }
+
+    // ── get_month_name Tests ──
+
+    #[test]
+    fn test_get_month_name_all() {
+        assert_eq!(get_month_name(1), "January");
+        assert_eq!(get_month_name(2), "February");
+        assert_eq!(get_month_name(3), "March");
+        assert_eq!(get_month_name(4), "April");
+        assert_eq!(get_month_name(5), "May");
+        assert_eq!(get_month_name(6), "June");
+        assert_eq!(get_month_name(7), "July");
+        assert_eq!(get_month_name(8), "August");
+        assert_eq!(get_month_name(9), "September");
+        assert_eq!(get_month_name(10), "October");
+        assert_eq!(get_month_name(11), "November");
+        assert_eq!(get_month_name(12), "December");
+    }
+
+    #[test]
+    fn test_get_month_name_invalid() {
+        assert_eq!(get_month_name(0), "Unknown");
+        assert_eq!(get_month_name(13), "Unknown");
+    }
+
+    // ── extract_first_image_id Tests ──
+
+    #[test]
+    fn test_extract_first_image_id_found() {
+        let content = "text ![alt](/resources/42) more text";
+        assert_eq!(extract_first_image_id(content), Some(42));
+    }
+
+    #[test]
+    fn test_extract_first_image_id_no_image() {
+        let content = "no image here";
+        assert_eq!(extract_first_image_id(content), None);
+    }
+
+    #[test]
+    fn test_extract_first_image_id_multiple() {
+        let content = "![a](/resources/1) ![b](/resources/2)";
+        assert_eq!(extract_first_image_id(content), Some(1));
+    }
+
+    #[test]
+    fn test_extract_first_image_id_non_numeric() {
+        let content = "![a](/resources/abc)";
+        assert_eq!(extract_first_image_id(content), None);
+    }
+
+    #[test]
+    fn test_extract_first_image_id_no_closing_paren() {
+        let content = "![a](/resources/42";
+        assert_eq!(extract_first_image_id(content), None);
+    }
+
+    #[test]
+    fn test_extract_first_image_id_empty() {
+        assert_eq!(extract_first_image_id(""), None);
+    }
+
+    // ── uuid_v4 Tests ──
+
+    #[test]
+    fn test_uuid_v4_format() {
+        let id = uuid_v4();
+        assert!(!id.is_empty());
+        assert_eq!(id.len(), 32);
+        assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_uuid_v4_unique() {
+        let a = uuid_v4();
+        let b = uuid_v4();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_uuid_v4_hex_only() {
+        let id = uuid_v4();
+        assert!(id.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')));
+    }
+
+    // ── get_client_ip Tests ──
+
+    #[test]
+    fn test_get_client_ip_x_forwarded_for() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "203.0.113.1, 10.0.0.1".parse().unwrap());
+        let addr = "127.0.0.1:3000".parse::<SocketAddr>().unwrap();
+        let ip = get_client_ip(&headers, &ConnectInfo(addr));
+        assert_eq!(ip, "203.0.113.1");
+    }
+
+    #[test]
+    fn test_get_client_ip_x_real_ip() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-real-ip", "203.0.113.2".parse().unwrap());
+        let addr = "127.0.0.1:3000".parse::<SocketAddr>().unwrap();
+        let ip = get_client_ip(&headers, &ConnectInfo(addr));
+        assert_eq!(ip, "203.0.113.2");
+    }
+
+    #[test]
+    fn test_get_client_ip_fallback_to_socket() {
+        let headers = HeaderMap::new();
+        let addr = "10.0.0.5:5000".parse::<SocketAddr>().unwrap();
+        let ip = get_client_ip(&headers, &ConnectInfo(addr));
+        assert_eq!(ip, "10.0.0.5");
+    }
+
+    #[test]
+    fn test_get_client_ip_xff_priority() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
+        headers.insert("x-real-ip", "5.6.7.8".parse().unwrap());
+        let addr = "127.0.0.1:3000".parse::<SocketAddr>().unwrap();
+        let ip = get_client_ip(&headers, &ConnectInfo(addr));
+        assert_eq!(ip, "1.2.3.4");
+    }
+
+    #[test]
+    fn test_get_client_ip_xff_empty_skips() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "".parse().unwrap());
+        headers.insert("x-real-ip", "10.0.0.1".parse().unwrap());
+        let addr = "127.0.0.1:3000".parse::<SocketAddr>().unwrap();
+        let ip = get_client_ip(&headers, &ConnectInfo(addr));
+        assert_eq!(ip, "10.0.0.1");
+    }
+
+    // ── generate_calendar Tests ──
+
+    #[test]
+    fn test_generate_calendar_structure() {
+        let weeks = generate_calendar(2024, 1, &[]);
+        assert!(!weeks.is_empty());
+        let week = weeks[0].as_array().unwrap();
+        assert_eq!(week.len(), 7);
+    }
+
+    #[test]
+    fn test_generate_calendar_has_memos() {
+        let weeks = generate_calendar(2024, 1, &["2024-01-15".to_string()]);
+        let has_marked = weeks.iter().any(|w| {
+            w.as_array().unwrap().iter().any(|d| {
+                d["has_memos"].as_bool().unwrap_or(false)
+            })
+        });
+        assert!(has_marked);
+    }
+
+    #[test]
+    fn test_generate_calendar_no_memos() {
+        let weeks = generate_calendar(2024, 1, &[]);
+        let has_any_memos = weeks.iter().any(|w| {
+            w.as_array().unwrap().iter().any(|d| d["has_memos"].as_bool().unwrap_or(false))
+        });
+        assert!(!has_any_memos);
+    }
+
+    #[test]
+    fn test_generate_calendar_december() {
+        let weeks = generate_calendar(2024, 12, &[]);
+        assert!(!weeks.is_empty());
+    }
+
+    #[test]
+    fn test_generate_calendar_padding_days() {
+        let weeks = generate_calendar(2024, 1, &[]);
+        for w in &weeks {
+            let arr = w.as_array().unwrap();
+            assert_eq!(arr.len(), 7);
+        }
+    }
+
+    // ── process_memo_content Tests (basic without DB) ──
+
+    #[test]
+    fn test_process_memo_content_no_refs() {
+        let db = db::Database::new(":memory:").unwrap();
+        let (content, resources) = process_memo_content(&db, "Hello world");
+        assert_eq!(content, "Hello world");
+        assert!(resources.is_empty());
+    }
+
+    #[test]
+    fn test_process_memo_content_empty() {
+        let db = db::Database::new(":memory:").unwrap();
+        let (content, resources) = process_memo_content(&db, "");
+        assert_eq!(content, "");
+        assert!(resources.is_empty());
+    }
+
+    #[test]
+    fn test_process_memo_content_ref_not_found() {
+        let db = db::Database::new(":memory:").unwrap();
+        let (content, resources) = process_memo_content(&db, "see [file](/resources/999)");
+        assert_eq!(content, "see [file](/resources/999)");
+        assert!(resources.is_empty());
+    }
 }

@@ -60,6 +60,18 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
                 hljs.highlightElement(block);
             });
         });
+        document.addEventListener('htmx:beforeSend', function() {
+            document.getElementById('global-loader').classList.add('active');
+        });
+        document.addEventListener('htmx:afterSettle', function() {
+            document.getElementById('global-loader').classList.remove('active');
+        });
+        document.addEventListener('htmx:responseError', function() {
+            document.getElementById('global-loader').classList.remove('active');
+        });
+        document.addEventListener('htmx:sendError', function() {
+            document.getElementById('global-loader').classList.remove('active');
+        });
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('pre code').forEach((block) => {
                 hljs.highlightElement(block);
@@ -67,6 +79,9 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         });
     </script>
     <style>
+        #global-loader { position: fixed; inset: 0; z-index: 99999; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); backdrop-filter: blur(2px); }
+        #global-loader.active { display: flex; }
+        #global-loader svg { width: 48px; height: 48px; }
         :root {
             --bg: oklch(0.9818 0.0054 95.0986);
             --fg: oklch(0.2438 0.0269 95.7226);
@@ -171,6 +186,7 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
     </style>
 </head>
 <body class="bg-background text-foreground min-h-screen">
+    <div id="global-loader"><svg fill="white" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="6" width="2.8" height="12"><animate begin="spinner_Diec.begin+0.4s" attributeName="y" calcMode="spline" dur="0.6s" values="6;1;6" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/><animate begin="spinner_Diec.begin+0.4s" attributeName="height" calcMode="spline" dur="0.6s" values="12;22;12" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/></rect><rect x="5.8" y="6" width="2.8" height="12"><animate begin="spinner_Diec.begin+0.2s" attributeName="y" calcMode="spline" dur="0.6s" values="6;1;6" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/><animate begin="spinner_Diec.begin+0.2s" attributeName="height" calcMode="spline" dur="0.6s" values="12;22;12" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/></rect><rect x="10.6" y="6" width="2.8" height="12"><animate id="spinner_Diec" begin="0;spinner_dm8s.end-0.1s" attributeName="y" calcMode="spline" dur="0.6s" values="6;1;6" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/><animate begin="0;spinner_dm8s.end-0.1s" attributeName="height" calcMode="spline" dur="0.6s" values="12;22;12" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/></rect><rect x="15.4" y="6" width="2.8" height="12"><animate begin="spinner_Diec.begin+0.2s" attributeName="y" calcMode="spline" dur="0.6s" values="6;1;6" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/><animate begin="spinner_Diec.begin+0.2s" attributeName="height" calcMode="spline" dur="0.6s" values="12;22;12" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/></rect><rect x="20.2" y="6" width="2.8" height="12"><animate id="spinner_dm8s" begin="spinner_Diec.begin+0.4s" attributeName="y" calcMode="spline" dur="0.6s" values="6;1;6" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/><animate begin="spinner_Diec.begin+0.4s" attributeName="height" calcMode="spline" dur="0.6s" values="12;22;12" keySplines=".14,.73,.34,1;.65,.26,.82,.45"/></rect></svg></div>
     {% block content %}{% endblock %}
 <div id="image-modal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden" onclick="closeImageModal()">
     <button class="absolute top-4 right-4 text-white/70 hover:text-white text-2xl leading-none w-10 h-10 flex items-center justify-center rounded-full bg-black/20 hover:bg-black/40 transition-colors">&times;</button>
@@ -181,6 +197,235 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
     <button type="button" onclick="setImageWidth('50%')" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">Half Width</button>
     <button type="button" onclick="setImageWidth('100%')" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">Full Width</button>
 </div>
+
+<!-- Share Modal -->
+<div id="share-modal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden" style="background:rgba(0,0,0,0.5)">
+    <div class="bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-sm mx-4" onclick="event.stopPropagation()">
+        <div class="text-center mb-4">
+            <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 mb-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-foreground" id="share-modal-title">Share Note</h3>
+            <p class="text-xs text-muted-fg mt-1" id="share-modal-desc">Set a password for others to view this note.</p>
+        </div>
+        <div class="space-y-3">
+            <div>
+                <label for="share-password" class="block text-sm font-medium mb-1">Password</label>
+                <input type="password" id="share-password" placeholder="Enter a password..."
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            </div>
+            <div>
+                <label for="share-password-confirm" class="block text-sm font-medium mb-1">Confirm Password</label>
+                <input type="password" id="share-password-confirm" placeholder="Confirm password..."
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            </div>
+            <p id="share-error" class="text-red-500 text-xs hidden"></p>
+        </div>
+        <div class="flex gap-2 mt-4">
+            <button onclick="closeShareModal()"
+                class="flex-1 px-3 py-2 text-sm font-medium text-muted-fg hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors">Cancel</button>
+            <button id="share-submit-btn" onclick="submitSharePassword()"
+                class="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Set Password &amp; Copy Link</button>
+        </div>
+    </div>
+</div>
+
+<!-- Visibility Password Modal -->
+<div id="vis-password-modal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden" style="background:rgba(0,0,0,0.5)">
+    <div class="bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-sm mx-4" onclick="event.stopPropagation()">
+        <div class="text-center mb-4">
+            <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 mb-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-foreground" id="vis-pwd-title">Password Required</h3>
+            <p class="text-xs text-muted-fg mt-1" id="vis-pwd-desc">Set a password to protect this note.</p>
+        </div>
+        <div class="space-y-3">
+            <div>
+                <label for="vis-pwd-input" class="block text-sm font-medium mb-1">Password</label>
+                <input type="password" id="vis-pwd-input" placeholder="Enter a password..."
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            </div>
+            <div>
+                <label for="vis-pwd-confirm" class="block text-sm font-medium mb-1">Confirm Password</label>
+                <input type="password" id="vis-pwd-confirm" placeholder="Confirm password..."
+                    class="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            </div>
+            <p id="vis-pwd-error" class="text-red-500 text-xs hidden"></p>
+        </div>
+        <div class="flex gap-2 mt-4">
+            <button onclick="closeVisPwdModal()"
+                class="flex-1 px-3 py-2 text-sm font-medium text-muted-fg hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors">Cancel</button>
+            <button onclick="confirmVisPwd()"
+                class="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Set Password</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 opacity-0 translate-y-2 hidden">
+</div>
+
+<script>
+function showToast(msg, type) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 opacity-0 translate-y-2 ';
+    if (type === 'error') {
+        t.classList.add('bg-red-600', 'text-white');
+    } else if (type === 'success') {
+        t.classList.add('bg-green-600', 'text-white');
+    } else {
+        t.classList.add('bg-gray-800', 'dark:bg-gray-200', 'text-white', 'dark:text-gray-900');
+    }
+    t.classList.remove('hidden', 'opacity-0', 'translate-y-2');
+    // force reflow
+    void t.offsetWidth;
+    t.classList.add('opacity-100', 'translate-y-0');
+    setTimeout(function() { t.classList.remove('opacity-100', 'translate-y-0'); t.classList.add('opacity-0', 'translate-y-2'); }, 2500);
+}
+
+var shareNoteId = null;
+
+function shareNote(id, visibility) {
+    shareNoteId = id;
+    if (visibility === 'public') {
+        var url = window.location.origin + '/share/' + id;
+        navigator.clipboard.writeText(url).then(function() {
+            showToast('Share link copied to clipboard!', 'success');
+        }).catch(function() {
+            showToast('Failed to copy link', 'error');
+        });
+    } else if (visibility === 'protected') {
+        document.getElementById('share-modal-title').textContent = 'Share Protected Note';
+        document.getElementById('share-modal-desc').textContent = 'Set or update the password for others to view this note.';
+        document.getElementById('share-password').value = '';
+        document.getElementById('share-password-confirm').value = '';
+        document.getElementById('share-error').classList.add('hidden');
+        document.getElementById('share-submit-btn').disabled = false;
+        document.getElementById('share-submit-btn').textContent = 'Set Password & Copy Link';
+        document.getElementById('share-modal').classList.remove('hidden');
+        document.getElementById('share-password').focus();
+    } else {
+        showToast('Set visibility to Public or Protected in edit to share', 'error');
+    }
+}
+
+function closeShareModal() {
+    document.getElementById('share-modal').classList.add('hidden');
+    shareNoteId = null;
+}
+
+function submitSharePassword() {
+    var pwd = document.getElementById('share-password').value;
+    var confirm = document.getElementById('share-password-confirm').value;
+    var errEl = document.getElementById('share-error');
+    var btn = document.getElementById('share-submit-btn');
+    if (!pwd || pwd.length < 4) {
+        errEl.textContent = 'Password must be at least 4 characters';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    if (pwd !== confirm) {
+        errEl.textContent = 'Passwords do not match';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    errEl.classList.add('hidden');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    fetch('/notes/' + shareNoteId + '/share', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd })
+    }).then(function(r) {
+        if (!r.ok) { throw new Error('Failed to save password'); }
+        return r.json();
+    }).then(function(data) {
+        closeShareModal();
+        var url = window.location.origin + '/share/' + shareNoteId;
+        navigator.clipboard.writeText(url).then(function() {
+            showToast('Share link copied to clipboard!', 'success');
+        }).catch(function() {
+            showToast('Share link: ' + url, '');
+        });
+    }).catch(function(e) {
+        btn.disabled = false;
+        btn.textContent = 'Set Password & Copy Link';
+        errEl.textContent = 'Failed to save password. Try again.';
+        errEl.classList.remove('hidden');
+    });
+}
+
+/* ── Visibility Password Modal ── */
+var visPwdCallback = null;
+
+function showVisPwdModal(isEdit) {
+    if (isEdit) {
+        document.getElementById('vis-pwd-title').textContent = 'Update Password';
+        document.getElementById('vis-pwd-desc').textContent = 'Enter a new password or leave empty to keep the current one.';
+    } else {
+        document.getElementById('vis-pwd-title').textContent = 'Password Required';
+        document.getElementById('vis-pwd-desc').textContent = 'Set a password to protect this note.';
+    }
+    document.getElementById('vis-pwd-input').value = '';
+    document.getElementById('vis-pwd-confirm').value = '';
+    document.getElementById('vis-pwd-error').classList.add('hidden');
+    document.getElementById('vis-password-modal').classList.remove('hidden');
+    document.getElementById('vis-pwd-input').focus();
+}
+
+function closeVisPwdModal() {
+    document.getElementById('vis-password-modal').classList.add('hidden');
+    visPwdCallback = null;
+}
+
+function confirmVisPwd() {
+    var pwd = document.getElementById('vis-pwd-input').value;
+    var confirm = document.getElementById('vis-pwd-confirm').value;
+    var errEl = document.getElementById('vis-pwd-error');
+    if (pwd && pwd.length < 4) {
+        errEl.textContent = 'Password must be at least 4 characters';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    if (pwd !== confirm) {
+        errEl.textContent = 'Passwords do not match';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    errEl.classList.add('hidden');
+    if (visPwdCallback) visPwdCallback(pwd);
+    closeVisPwdModal();
+}
+
+function filterNotesSidebar(q) {
+    var container = document.getElementById('notes-list-container');
+    if (!container) return;
+    var items = container.querySelectorAll('[data-note-id]');
+    var lower = q.toLowerCase().trim();
+    var anyVisible = false;
+    items.forEach(function(item) {
+        var search = (item.getAttribute('data-search') || item.getAttribute('data-title') || item.textContent || '').toLowerCase();
+        var match = !lower || search.indexOf(lower) >= 0;
+        item.style.display = match ? '' : 'none';
+        if (match) anyVisible = true;
+    });
+    var emptyMsg = container.querySelector('.sidebar-empty-msg');
+    if (!lower) { if (emptyMsg) emptyMsg.remove(); return; }
+    if (!anyVisible) {
+        if (!container.querySelector('.sidebar-empty-msg')) {
+            var msg = document.createElement('p');
+            msg.className = 'sidebar-empty-msg text-xs text-muted-fg p-3 text-center';
+            msg.textContent = 'No matching notes.';
+            container.appendChild(msg);
+        }
+    } else {
+        var msg = container.querySelector('.sidebar-empty-msg');
+        if (msg) msg.remove();
+    }
+}
+</script>
 </body>
 </html>"#;
 
@@ -429,6 +674,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                   </button>
                                               </div>
                                               <input type="hidden" name="visibility" value="private">
+                                              <input type="hidden" name="visibility_password" value="">
                                           </div>
                                           <span class="text-xs text-muted-fg">Press <kbd class="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> for commands</span>
                                       </div>
@@ -1025,21 +1271,42 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     function toggleVisDropdown(btn) {
         var menu = btn.parentElement.querySelector('.vis-dropdown-menu');
         if (!menu) return;
+        closeAllDropdowns();
         menu.classList.toggle('hidden');
+    }
+    function applyVis(dd, btn, vis) {
+        dd.querySelectorAll('.vis-dropdown-menu button').forEach(function(b) { b.classList.remove('bg-muted'); });
+        btn.classList.add('bg-muted');
+        dd.querySelector('.vis-label').innerHTML = btn.innerHTML;
+        dd.querySelector('input[name="visibility"]').value = vis;
+        dd.querySelector('.vis-dropdown-menu').classList.add('hidden');
     }
     function selectVis(btn) {
         var dd = btn.closest('.visibility-dropdown');
         if (!dd) return;
-        dd.querySelectorAll('.vis-dropdown-menu button').forEach(function(b) { b.classList.remove('bg-muted'); });
-        btn.classList.add('bg-muted');
-        dd.querySelector('.vis-label').innerHTML = btn.innerHTML;
-        dd.querySelector('input[type="hidden"]').value = btn.dataset.visValue;
-        dd.querySelector('.vis-dropdown-menu').classList.add('hidden');
+        var vis = btn.dataset.visValue;
+        if (vis === 'protected') {
+            var isEdit = dd.classList.contains('edit-vis');
+            showVisPwdModal(isEdit);
+            visPwdCallback = function(pwd) {
+                dd.querySelector('input[name="visibility_password"]').value = pwd || '';
+                applyVis(dd, btn, 'protected');
+            };
+            return;
+        }
+        dd.querySelector('input[name="visibility_password"]').value = '';
+        applyVis(dd, btn, vis);
     }
     function updateVisUI(dd) {
         var val = dd.dataset.vis || 'private';
         var btn = dd.querySelector('.vis-dropdown-menu button[data-vis-value="' + val + '"]');
-        if (btn) selectVis(btn);
+        if (btn) {
+            dd.querySelectorAll('.vis-dropdown-menu button').forEach(function(b) { b.classList.remove('bg-muted'); });
+            btn.classList.add('bg-muted');
+            dd.querySelector('.vis-label').innerHTML = btn.innerHTML;
+            dd.querySelector('input[name="visibility"]').value = val;
+            dd.querySelector('.vis-dropdown-menu').classList.add('hidden');
+        }
     }
 
     /* ── Tiptap Init (loaded from local bundle) ── */
@@ -1408,9 +1675,9 @@ const SHARE_PASSWORD_TEMPLATE: &str = r##"{% extends "base" %}
 </div>
 {% endblock %}"##;
 
-const NOTES_PANEL_TEMPLATE: &str = r#"{% if partial %}
+const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
 {% for note in notes %}
-<div data-note-id="{{ note.id }}" onclick="openNote({{ note.id }})"
+<div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}" onclick="openNote({{ note.id }})"
     class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30">
     <div class="flex-1 min-w-0">
         <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
@@ -1448,10 +1715,20 @@ const NOTES_PANEL_TEMPLATE: &str = r#"{% if partial %}
     <div class="px-4 py-3 border-b border-border flex-shrink-0">
         <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">Notes</h2>
     </div>
-    <div class="flex-1 overflow-y-auto p-2 space-y-1">
+    <div class="px-3 pt-3 pb-2 flex-shrink-0">
+        <input type="text" name="q" placeholder="Search notes..."
+            hx-get="/search"
+            hx-target="#timeline"
+            hx-swap="innerHTML"
+            hx-trigger="keyup changed delay:400ms, search"
+            hx-on::before-request="if (this.value === '') { event.detail.pathInfo.requestPath = '/memos-feed' }"
+            oninput="filterNotesSidebar(this.value)"
+            class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+    </div>
+    <div class="flex-1 overflow-y-auto p-2 space-y-1" id="notes-list-container">
         {% if notes %}
             {% for note in notes %}
-            <div data-note-id="{{ note.id }}" onclick="openNote({{ note.id }})"
+            <div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}" onclick="openNote({{ note.id }})"
                 class="p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between border-b border-border/30">
                 <div class="flex-1 min-w-0">
                     <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
@@ -1489,7 +1766,7 @@ const NOTES_PANEL_TEMPLATE: &str = r#"{% if partial %}
         {% endif %}
     </div>
 </div>
-{% endif %}"#;
+{% endif %}"##;
 
 const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
     <a href="/app/timeline"
@@ -1521,6 +1798,11 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
                 {% endif %}
             </div>
             <div class="ml-auto flex items-center gap-1 opacity-0 group-hover/memo:opacity-100 transition-opacity">
+                <button onclick="shareNote({{ id }}, '{{ visibility }}')"
+                    class="p-1 rounded-md text-muted-fg hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Share">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                </button>
                 <button onclick="editMemo({{ id }})"
                     class="p-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Edit">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1786,7 +2068,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     <div id="link-memo-results" class="max-h-[200px] overflow-y-auto"></div>
                 </div>
             </div>
-            <div class="visibility-dropdown relative" data-vis="private">
+            <div class="visibility-dropdown relative edit-vis" data-vis="{{ visibility }}"{% if has_password %} data-has-password="true"{% endif %}>
                 <button type="button" onclick="toggleVisDropdown(this)" class="flex items-center gap-1 px-1.5 py-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors text-xs">
                     <span class="vis-label flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>Private</span>
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -1798,14 +2080,15 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     </button>
                     <button type="button" data-vis-value="protected" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
-                        Protected
+                        Protected{% if has_password %} <span class="text-[9px] text-green-600 dark:text-green-400 ml-1">✓ Set</span>{% endif %}
                     </button>
                     <button type="button" data-vis-value="private" onclick="selectVis(this)" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                         Private
                     </button>
                 </div>
-                <input type="hidden" name="visibility" value="private">
+                <input type="hidden" name="visibility" value="{{ visibility }}">
+                <input type="hidden" name="visibility_password" value="">
             </div>
             <span class="text-xs text-muted-fg">Ctrl+Enter</span>
         </div>

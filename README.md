@@ -55,6 +55,14 @@ docker compose up --build
 | `DATABASE_PATH` | `data/minimamemosa.db` | SQLite database file path |
 | `SESSION_SECRET` | `minimamemosa-default-secret-change-me` | HMAC key for session signing |
 
+## Testing
+
+```bash
+cargo test
+```
+
+Runs 165+ unit tests covering the database layer, authentication tokens, password hashing, CAPTCHA, rate limiting, markdown rendering, HTML stripping, tag extraction, date formatting, and all utility functions.
+
 ## Endpoints
 
 | Method | Path | Description |

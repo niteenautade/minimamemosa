@@ -20,6 +20,9 @@ pulldown-cmark = "0.11"
 captcha = "1.0.0"
 base64 = "0.22.1"
 
+[dev-dependencies]
+tempfile = "3"
+
 [profile.release]
 opt-level = "z"
 lto = true
