@@ -1365,6 +1365,30 @@ async fn get_memos_json(
     (StatusCode::OK, Json(json!(list))).into_response()
 }
 
+async fn get_calendar(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let now = chrono::Utc::now();
+    let year = now.year();
+    let month = now.month();
+    let memo_dates = if let Some(q) = params.get("q").filter(|s| !s.is_empty()) {
+        state.db.get_memo_dates_in_month_for_query(user_id, year, month, q).unwrap_or_default()
+    } else {
+        state.db.get_memo_dates_in_month(user_id, year, month).unwrap_or_default()
+    };
+    let calendar_weeks = generate_calendar(year, month, &memo_dates);
+    state.templates.render("calendar", &json!({
+        "month_label": format!("{} {}", get_month_name(month), year),
+        "calendar_weeks": calendar_weeks,
+    })).into_response()
+}
+
 async fn get_sidebar_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
@@ -1423,6 +1447,7 @@ async fn main() {
         .route("/search", get(get_search))
         .route("/memos-json", get(get_memos_json))
         .route("/sidebar-timeline", get(get_sidebar_timeline))
+        .route("/calendar", get(get_calendar))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
     let addr = "0.0.0.0:3000";

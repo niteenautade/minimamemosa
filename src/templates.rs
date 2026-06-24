@@ -1619,22 +1619,27 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
     </div>
     <!-- Search -->
     <div class="px-3 pt-3 pb-2 flex-shrink-0">
-        <input type="text" name="q" placeholder="Search notes..."
+        <input type="text" id="sidebar-search-input" name="q" placeholder="Search notes..."
             hx-get="/search"
             hx-target="#timeline"
             hx-swap="innerHTML"
             hx-trigger="keyup changed delay:400ms, search"
             hx-on::before-request="if (this.value === '') { event.detail.pathInfo.requestPath = '/memos-feed' }"
+            hx-on::after-request="htmx.trigger('body', 'searchUpdated')"
             class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all" />
     </div>
 
     <!-- Calendar -->
-    <div class="px-3 py-2 flex-shrink-0">
+    <div id="sidebar-calendar" class="px-3 py-2 flex-shrink-0"
+         hx-trigger="searchUpdated from:body"
+         hx-get="/calendar"
+         hx-target="this"
+         hx-swap="innerHTML"
+         hx-include="#sidebar-search-input">
         <div class="flex items-center justify-between mb-2">
             <h3 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">{{ month_label }}</h3>
         </div>
         <div class="grid grid-cols-7 gap-0.5">
-            <!-- Day headers -->
             <div class="col-span-7 grid grid-cols-7 text-center text-xs text-muted-fg font-medium mb-0.5">
                 <span class="py-0.5">Mon</span><span class="py-0.5">Tue</span><span class="py-0.5">Wed</span><span class="py-0.5">Thu</span><span class="py-0.5">Fri</span><span class="py-0.5">Sat</span><span class="py-0.5">Sun</span>
             </div>
@@ -1645,6 +1650,7 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
                 <button hx-get="/search?date={{ day.date }}"
                     hx-target="#timeline"
                     hx-swap="innerHTML"
+                    hx-on::after-request="htmx.trigger('body', 'searchUpdated')"
                     class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
                         {% if day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
                         {% elif day.is_today %} bg-accent-600 dark:bg-accent-200/90 text-white dark:text-accent-800 font-semibold shadow-sm
@@ -1722,6 +1728,40 @@ const MEMOS_FEED_TEMPLATE: &str = r##"{% for group in memo_groups %}
     <p class="text-muted-fg text-sm">No notes found</p>
 </div>
 {% endif %}"##;
+
+const CALENDAR_TEMPLATE: &str = r##"<div class="flex items-center justify-between mb-2">
+    <h3 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">{{ month_label }}</h3>
+</div>
+<div class="grid grid-cols-7 gap-0.5">
+    <div class="col-span-7 grid grid-cols-7 text-center text-xs text-muted-fg font-medium mb-0.5">
+        <span class="py-0.5">Mon</span><span class="py-0.5">Tue</span><span class="py-0.5">Wed</span><span class="py-0.5">Thu</span><span class="py-0.5">Fri</span><span class="py-0.5">Sat</span><span class="py-0.5">Sun</span>
+    </div>
+    {% for week in calendar_weeks %}
+    <div class="col-span-7 grid grid-cols-7 gap-0.5">
+        {% for day in week %}
+        {% if day.is_current_month %}
+        <button hx-get="/search?date={{ day.date }}"
+            hx-target="#timeline"
+            hx-swap="innerHTML"
+            hx-on::after-request="htmx.trigger('body', 'searchUpdated')"
+            class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
+                {% if day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
+                {% elif day.is_today %} bg-accent-600 dark:bg-accent-200/90 text-white dark:text-accent-800 font-semibold shadow-sm
+                {% else %} text-muted-fg hover:bg-muted dark:hover:bg-muted{% endif %}">
+            {% if day.is_today %}
+            <span class="relative z-10">{{ day.day }}</span>
+            <span class="absolute inset-0.5 rounded-lg ring-1 ring-inset ring-white/30"></span>
+            {% else %}
+            {{ day.day }}
+            {% endif %}
+        </button>
+        {% else %}
+        <div class="w-full aspect-square"></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>"##;
 
 const SHARE_NOTE_TEMPLATE: &str = r##"{% extends "base" %}
 {% block content %}
@@ -2348,6 +2388,7 @@ impl Templates {
         env.add_template("memo_edit_form", MEMO_EDIT_FORM).unwrap();
         env.add_template("resources_panel", RESOURCES_PANEL_TEMPLATE).unwrap();
         env.add_template("sidebar_timeline", SIDEBAR_TIMELINE_TEMPLATE).unwrap();
+        env.add_template("calendar", CALENDAR_TEMPLATE).unwrap();
         env.add_template("memos_feed", MEMOS_FEED_TEMPLATE).unwrap();
         env.add_template("share_note", SHARE_NOTE_TEMPLATE).unwrap();
         env.add_template("share_password", SHARE_PASSWORD_TEMPLATE).unwrap();

@@ -250,6 +250,23 @@ impl Database {
         Ok(memos)
     }
 
+    pub fn get_memo_dates_in_month_for_query(&self, user_id: i64, year: i32, month: u32, query: &str) -> rusqlite::Result<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let pattern = format!("%{}%", query);
+        let month_start = format!("{}-{:02}-%", year, month);
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT date(created_at) FROM memos WHERE user_id = ?1 AND created_at LIKE ?2 AND (title LIKE ?3 OR content LIKE ?3)"
+        )?;
+        let rows = stmt.query_map(params![user_id, month_start, pattern], |row| {
+            row.get::<_, String>(0)
+        })?;
+        let mut dates = Vec::new();
+        for row in rows {
+            dates.push(row?);
+        }
+        Ok(dates)
+    }
+
     pub fn get_memo_dates_in_month(&self, user_id: i64, year: i32, month: u32) -> rusqlite::Result<Vec<String>> {
         let conn = self.conn.lock().unwrap();
         let month_start = format!("{}-{:02}-%", year, month);
