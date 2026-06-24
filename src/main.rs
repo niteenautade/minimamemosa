@@ -199,7 +199,7 @@ fn get_month_name(month: u32) -> &'static str {
     }
 }
 
-fn generate_calendar(year: i32, month: u32, memo_dates: &[String]) -> Vec<serde_json::Value> {
+fn generate_calendar(year: i32, month: u32, memo_dates: &[String], selected_date: Option<&str>) -> Vec<serde_json::Value> {
     use chrono::Datelike;
     let first_day = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let last_day = {
@@ -214,18 +214,22 @@ fn generate_calendar(year: i32, month: u32, memo_dates: &[String]) -> Vec<serde_
     let mut weeks: Vec<Vec<serde_json::Value>> = Vec::new();
     let mut current_week = Vec::new();
     for _ in 0..weekday {
-        current_week.push(json!({"day": 0, "date": "", "has_memos": false, "is_today": false, "is_current_month": false}));
+        current_week.push(json!({"day": 0, "date": "", "has_memos": false, "is_today": false, "is_selected": false, "is_future": false, "is_current_month": false}));
     }
     let mut day = first_day;
     while day <= last_day {
         let date_str = day.format("%Y-%m-%d").to_string();
         let has_memos = memo_dates.contains(&date_str);
         let is_today = date_str == today;
+        let is_selected = selected_date.map_or(false, |sd| date_str == sd);
+        let is_future = date_str > today;
         current_week.push(json!({
             "day": day.day(),
             "date": date_str,
             "has_memos": has_memos,
             "is_today": is_today,
+            "is_selected": is_selected,
+            "is_future": is_future,
             "is_current_month": true,
         }));
         if current_week.len() == 7 {
@@ -236,7 +240,7 @@ fn generate_calendar(year: i32, month: u32, memo_dates: &[String]) -> Vec<serde_
     }
     if !current_week.is_empty() {
         while current_week.len() < 7 {
-            current_week.push(json!({"day": 0, "date": "", "has_memos": false, "is_today": false, "is_current_month": false}));
+            current_week.push(json!({"day": 0, "date": "", "has_memos": false, "is_today": false, "is_selected": false, "is_future": false, "is_current_month": false}));
         }
         weeks.push(current_week);
     }
@@ -1382,14 +1386,19 @@ async fn get_calendar(
     } else {
         state.db.get_memo_dates_in_month(user_id, year, month).unwrap_or_default()
     };
-    let calendar_weeks = generate_calendar(year, month, &memo_dates);
+    let selected_date = params.get("selected_date").map(|s| s.as_str());
+    let calendar_weeks = generate_calendar(year, month, &memo_dates, selected_date);
     state.templates.render("calendar", &json!({
         "month_label": format!("{} {}", get_month_name(month), year),
         "calendar_weeks": calendar_weeks,
     })).into_response()
 }
 
-async fn get_sidebar_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn get_sidebar_timeline(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
     let user_id = match get_session_user_id(&headers) {
         Some(id) => id,
         None => return StatusCode::UNAUTHORIZED.into_response(),
@@ -1398,7 +1407,8 @@ async fn get_sidebar_timeline(headers: HeaderMap, State(state): State<Arc<AppSta
     let year = now.year();
     let month = now.month();
     let memo_dates = state.db.get_memo_dates_in_month(user_id, year, month).unwrap_or_default();
-    let calendar_weeks = generate_calendar(year, month, &memo_dates);
+    let selected_date = params.get("selected_date").or_else(|| params.get("date")).map(|s| s.as_str());
+    let calendar_weeks = generate_calendar(year, month, &memo_dates, selected_date);
     let tags = state.db.get_user_tags(user_id).unwrap_or_default();
     let tag_list: Vec<serde_json::Value> = tags.iter().map(|(name, count)| {
         json!({"name": name, "count": count})
@@ -1993,7 +2003,7 @@ mod tests {
 
     #[test]
     fn test_generate_calendar_structure() {
-        let weeks = generate_calendar(2024, 1, &[]);
+        let weeks = generate_calendar(2024, 1, &[], None);
         assert!(!weeks.is_empty());
         let week = weeks[0].as_array().unwrap();
         assert_eq!(week.len(), 7);
@@ -2001,7 +2011,7 @@ mod tests {
 
     #[test]
     fn test_generate_calendar_has_memos() {
-        let weeks = generate_calendar(2024, 1, &["2024-01-15".to_string()]);
+        let weeks = generate_calendar(2024, 1, &["2024-01-15".to_string()], None);
         let has_marked = weeks.iter().any(|w| {
             w.as_array().unwrap().iter().any(|d| {
                 d["has_memos"].as_bool().unwrap_or(false)
@@ -2012,7 +2022,7 @@ mod tests {
 
     #[test]
     fn test_generate_calendar_no_memos() {
-        let weeks = generate_calendar(2024, 1, &[]);
+        let weeks = generate_calendar(2024, 1, &[], None);
         let has_any_memos = weeks.iter().any(|w| {
             w.as_array().unwrap().iter().any(|d| d["has_memos"].as_bool().unwrap_or(false))
         });
@@ -2021,17 +2031,26 @@ mod tests {
 
     #[test]
     fn test_generate_calendar_december() {
-        let weeks = generate_calendar(2024, 12, &[]);
+        let weeks = generate_calendar(2024, 12, &[], None);
         assert!(!weeks.is_empty());
     }
 
     #[test]
     fn test_generate_calendar_padding_days() {
-        let weeks = generate_calendar(2024, 1, &[]);
+        let weeks = generate_calendar(2024, 1, &[], None);
         for w in &weeks {
             let arr = w.as_array().unwrap();
             assert_eq!(arr.len(), 7);
         }
+
+    #[test]
+    fn test_generate_calendar_selected_date() {
+        let weeks = generate_calendar(2024, 1, &[], Some("2024-01-15"));
+        let has_selected = weeks.iter().any(|w| {
+            w.as_array().unwrap().iter().any(|d| d["is_selected"].as_bool().unwrap_or(false))
+        });
+        assert!(has_selected);
+    }
     }
 
     // ── process_memo_content Tests (basic without DB) ──

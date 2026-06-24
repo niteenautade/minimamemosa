@@ -251,6 +251,40 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-fg) 45%, transparent) transparent; }
         #image-modal { background: rgba(0,0,0,0.85); }
         #image-modal img { max-width: 95vw; max-height: 95vh; }
+        /* ── Mobile Responsive ── */
+
+        /* iOS 100vh fix */
+        @supports (height: 100dvh) {
+            .h-screen, .min-h-screen { height: 100dvh; min-height: 100dvh; }
+        }
+
+        /* Prevent iOS input zoom */
+        @media (max-width: 1023px) {
+            input, textarea, select, .tiptap-editor .ProseMirror {
+                font-size: 16px !important;
+            }
+        }
+
+        /* Safe area padding for bottom nav */
+        .safe-area-bottom {
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        }
+
+        /* Touch optimization */
+        button, a { touch-action: manipulation; }
+
+        /* Smooth mobile scrolling */
+        @media (max-width: 1023px) {
+            .overflow-y-auto { -webkit-overflow-scrolling: touch; }
+        }
+
+        /* Slash menu mobile constraint */
+        #slash-menu { max-width: calc(100vw - 16px); }
+
+        /* Mobile sidebar drawer transitions */
+        #mobile-sidebar-drawer {
+            transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
     </style>
 </head>
 <body class="bg-background text-foreground min-h-screen">
@@ -465,6 +499,50 @@ function filterNotesSidebar(q) {
 /* ── Settings Modal ── */
 function openSettings() { document.getElementById('settings-modal').classList.remove('hidden'); renderThemeOptions(); }
 function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
+
+var _selectedCalendarDate = '';
+/* ── Mobile Sidebar Drawer ── */
+function toggleMobileSidebar() {
+    var overlay = document.getElementById('mobile-sidebar-overlay');
+    var drawer  = document.getElementById('mobile-sidebar-drawer');
+    var content = document.getElementById('mobile-sidebar-content');
+    if (!overlay || !drawer) return;
+    var isOpen = !overlay.classList.contains('hidden');
+    if (isOpen) {
+        closeMobileSidebar();
+    } else {
+        var path = window.location.pathname;
+        var endpoint, title;
+        if (path.indexOf('/notes') >= 0) {
+            endpoint = '/notes-panel';
+            title = 'Notes';
+        } else if (path.indexOf('/resources') >= 0) {
+            endpoint = '/resources-feed?offset=0';
+            title = 'Resources';
+        } else {
+            endpoint = '/sidebar-timeline' + (_selectedCalendarDate ? '?selected_date=' + encodeURIComponent(_selectedCalendarDate) : '');
+            title = 'Timeline';
+        }
+        var titleEl = document.getElementById('mobile-drawer-title');
+        if (titleEl) titleEl.textContent = title;
+        if (content) {
+            htmx.ajax('GET', endpoint, {target: '#mobile-sidebar-content', swap: 'innerHTML'});
+        }
+        overlay.classList.remove('hidden');
+        drawer.classList.remove('-translate-x-full');
+        drawer.classList.add('translate-x-0');
+    }
+}
+function closeMobileSidebar() {
+    var overlay = document.getElementById('mobile-sidebar-overlay');
+    var drawer  = document.getElementById('mobile-sidebar-drawer');
+    if (overlay) overlay.classList.add('hidden');
+    if (drawer) {
+        drawer.classList.remove('translate-x-0');
+        drawer.classList.add('-translate-x-full');
+    }
+}
+
 function themeSwatchHtml(name) {
     var t = ACCENT_THEMES[name];
     if (!t) return '';
@@ -505,6 +583,24 @@ function renderThemeOptions() {
     _selectedTheme = saved;
 }
 </script>
+
+<!-- Mobile Sidebar Drawer -->
+<div id="mobile-sidebar-overlay" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm hidden lg:hidden" onclick="closeMobileSidebar()"></div>
+<div id="mobile-sidebar-drawer" class="fixed top-0 left-0 z-50 h-full w-[85vw] max-w-[320px] bg-sidebar border-r border-border transform -translate-x-full overflow-y-auto lg:hidden">
+    <!-- Sidebar content loaded dynamically -->
+    <div class="flex flex-col h-full">
+        <div class="px-4 py-3 border-b border-border flex-shrink-0 flex items-center justify-between">
+            <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wider" id="mobile-drawer-title">Timeline</h2>
+            <button onclick="closeMobileSidebar()" class="p-1 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div id="mobile-sidebar-content" class="flex-1 overflow-y-auto">
+            <!-- HTMX will load content here -->
+        </div>
+    </div>
+</div>
+
 </body>
 </html>"#;
 
@@ -586,6 +682,11 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <!-- Header -->
     <header class="flex items-center justify-between px-6 py-2.5 border-b border-border bg-card dark:bg-card flex-shrink-0 w-full">
         <div class="flex items-center gap-3">
+            <button onclick="toggleMobileSidebar()" class="p-1.5 rounded-lg hover:bg-muted text-muted-fg transition-colors lg:hidden" title="Menu">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
             <span class="text-sm font-semibold text-card-fg">MinimaMemosa</span>
         </div>
         <div class="flex items-center gap-2">
@@ -597,7 +698,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             </button>
             <div class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted cursor-pointer">
                 <div class="avatar-initials avatar-initials-sm bg-accent-500 text-white">{{ avatar }}</div>
-                <span class="text-sm text-card-fg">{{ username }}</span>
+                <span class="text-sm text-card-fg hidden sm:inline">{{ username }}</span>
             </div>
             <a href="/logout" class="text-xs text-muted-fg hover:text-red-500 transition-colors ml-1" title="Logout">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -609,7 +710,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
     <div class="flex flex-1 overflow-hidden">
         <!-- Icon Bar -->
-    <div class="w-14 flex-shrink-0 bg-card border-r border-border flex flex-col items-center py-3 gap-2 z-20">
+    <div class="w-14 flex-shrink-0 bg-card border-r border-border flex-col items-center py-3 gap-2 z-20 hidden lg:flex">
         <a id="icon-timeline"
             href="/app/timeline"
             class="p-2.5 rounded-xl {% if active_panel == 'timeline' %}bg-accent-100 dark:bg-accent-200/80 text-accent-600 dark:text-accent-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
@@ -650,10 +751,11 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         </button>
     </div>
 
+    <input type="hidden" id="selected-calendar-date" name="selected_date" value="">
     <!-- Sidebar Panel (timeline view - search + calendar) -->
     {% if not active_panel %}{% set active_panel = 'timeline' %}{% endif %}
     <div id="sidebar-panel"
-        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full overflow-hidden {% if active_panel != 'timeline' %}hidden{% endif %}">
+        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full overflow-hidden hidden {% if active_panel == 'timeline' %}lg:flex{% else %}lg:hidden{% endif %}">
         <div id="sidebar-content"
             hx-trigger="load once"
             hx-get="/sidebar-timeline"
@@ -664,7 +766,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
     <!-- Notes Panel -->
     <div id="notes-panel"
-        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full {% if active_panel == 'notes' %}{% else %}hidden{% endif %}"
+        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full hidden {% if active_panel == 'notes' %}lg:flex{% else %}lg:hidden{% endif %}"
         hx-trigger="load once, memoUpdated from:body"
         hx-get="/notes-panel"
         hx-swap="innerHTML"
@@ -673,7 +775,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
     <!-- Resources Panel -->
     <div id="resources-panel"
-        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full {% if active_panel == 'resources' %}{% else %}hidden{% endif %}"
+        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full hidden {% if active_panel == 'resources' %}lg:flex{% else %}lg:hidden{% endif %}"
         hx-trigger="load once"
         hx-get="/resources-feed?offset=0"
         hx-swap="innerHTML">
@@ -683,7 +785,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <div id="main-content" class="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         <!-- Timeline View -->
         <div id="timeline-view" class="flex-1 flex flex-col overflow-hidden">
-            <div class="flex-1 overflow-y-auto px-6 py-5">
+            <div class="flex-1 overflow-y-auto px-3 sm:px-4 lg:px-6 py-3 lg:py-5 pb-20 lg:pb-5">
                 <div class="max-w-2xl mx-auto">
                      <!-- Notion-style Editor -->
                      <div class="max-w-2xl mx-auto mb-8">
@@ -697,9 +799,9 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                     ondragleave="event.preventDefault(); this.classList.remove('border-accent-500')"
                                     ondrop="event.preventDefault(); this.classList.remove('border-accent-500'); handleDrop(event)"
                                     onsubmit="document.getElementById('memo-editor-input').value = getTiptapMarkdown();">
-                                  <div class="px-8 pt-6 pb-2 relative">
-                                       <div id="memo-editor"
-                                          class="w-full bg-transparent text-foreground text-base leading-snug min-h-[10rem] tiptap-editor max-w-none focus:outline-none"
+                                  <div class="px-3 sm:px-4 lg:px-8 pt-4 lg:pt-6 pb-2 relative">
+                                        <div id="memo-editor"
+                                           class="w-full bg-transparent text-foreground text-base leading-snug min-h-[6rem] lg:min-h-[10rem] tiptap-editor max-w-none focus:outline-none"
                                           contenteditable="false"
                                           data-placeholder="Type '/' for commands..."
                                           oninput="onFallbackInput(this)"
@@ -715,22 +817,22 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                    <div id="slash-menu" class="hidden bg-card border border-border rounded-lg shadow-lg py-1 min-w-[260px] z-50"></div>
                                    <input type="file" id="image-upload-input" accept="image/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
                                   <input type="file" id="file-upload-input" accept="*/*" multiple class="hidden" onchange="uploadFilesForEditor(this.files);this.value=''">
-                                   <div class="flex items-center justify-between px-8 py-3 border-t border-border bg-muted dark:bg-muted rounded-b-lg">
-                                      <div class="flex items-center gap-1">
-                                           <!-- Emoji Picker -->
-                                           <div class="visibility-dropdown relative">
-                                                <button type="button" onclick="event.stopPropagation(); toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
-                                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                               </button>
-                                               <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-h-[200px] overflow-y-auto">
-                                                   <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
-                                               </div>
-                                           </div>
+                                     <div class="flex items-center justify-between px-3 sm:px-4 lg:px-8 py-2 lg:py-3 border-t border-border bg-muted dark:bg-muted rounded-b-lg">
+                                       <div class="flex items-center flex-wrap gap-1">
+                                            <!-- Emoji Picker -->
+                                            <div class="visibility-dropdown relative">
+                                                 <button type="button" onclick="event.stopPropagation(); toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                </button>
+<div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[200px] overflow-y-auto">
+                                                    <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
+                                                </div>
+                                            </div>
                                           <div class="relative">
-                                               <button type="button" onclick="event.stopPropagation(); togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
+                                                <button type="button" onclick="event.stopPropagation(); togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
                                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                               </button>
-                                               <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px]">
+                                                <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px] max-w-[calc(100vw-2rem)]">
                                                   <button type="button" onclick="uploadImage()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                                                       <span>📷</span> Upload Image
                                                   </button>
@@ -780,7 +882,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                               <input type="hidden" name="visibility" value="private">
                                               <input type="hidden" name="visibility_password" value="">
                                           </div>
-                                          <span class="text-xs text-muted-fg">Press <kbd class="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> for commands</span>
+                                           <span class="text-xs text-muted-fg hidden lg:inline">Press <kbd class="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> for commands</span>
                                       </div>
                                       <button type="submit" id="save-memo-btn" disabled
                                           class="py-1.5 px-5 bg-accent-600 hover:bg-accent-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent-600">
@@ -851,6 +953,44 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         </div>
     </div>
 </div>
+
+<!-- Bottom Navigation (mobile only) -->
+<nav class="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border flex items-center justify-around py-2 px-4 lg:hidden safe-area-bottom">
+    <a href="/app/timeline"
+        class="flex flex-col items-center gap-0.5 p-1.5 {% if active_panel == 'timeline' %}text-accent-600 dark:text-accent-400{% else %}text-muted-fg{% endif %} transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/>
+            <line x1="8" y1="10" x2="16" y2="10" stroke-width="2"/>
+            <line x1="8" y1="14" x2="14" y2="14" stroke-width="2"/>
+        </svg>
+        <span class="text-[10px]">Timeline</span>
+    </a>
+    <a href="/app/notes"
+        class="flex flex-col items-center gap-0.5 p-1.5 {% if active_panel == 'notes' %}text-accent-600 dark:text-accent-400{% else %}text-muted-fg{% endif %} transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="2"/>
+            <polyline points="14 2 14 8 20 8" stroke-width="2"/>
+            <line x1="12" y1="18" x2="12" y2="12" stroke-width="2"/>
+            <line x1="9" y1="15" x2="15" y2="15" stroke-width="2"/>
+        </svg>
+        <span class="text-[10px]">Notes</span>
+    </a>
+    <a href="/app/resources"
+        class="flex flex-col items-center gap-0.5 p-1.5 {% if active_panel == 'resources' %}text-accent-600 dark:text-accent-400{% else %}text-muted-fg{% endif %} transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span class="text-[10px]">Resources</span>
+    </a>
+    <button onclick="openSettings()"
+        class="flex flex-col items-center gap-0.5 p-1.5 text-muted-fg transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span class="text-[10px]">Settings</span>
+    </button>
+</nav>
 
 <script>
     /* ── Editor Fallback (works if Tiptap CDN fails) ── */
@@ -1635,7 +1775,7 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
          hx-get="/calendar"
          hx-target="this"
          hx-swap="innerHTML"
-         hx-include="#sidebar-search-input">
+         hx-include="#sidebar-search-input, #selected-calendar-date">
         <div class="flex items-center justify-between mb-2">
             <h3 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">{{ month_label }}</h3>
         </div>
@@ -1646,22 +1786,19 @@ const SIDEBAR_TIMELINE_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
             {% for week in calendar_weeks %}
             <div class="col-span-7 grid grid-cols-7 gap-0.5">
                 {% for day in week %}
-                {% if day.is_current_month %}
+                {% if day.is_current_month and not day.is_future %}
                 <button hx-get="/search?date={{ day.date }}"
                     hx-target="#timeline"
                     hx-swap="innerHTML"
-                    hx-on::after-request="htmx.trigger('body', 'searchUpdated')"
+                    hx-on::after-request="_selectedCalendarDate='{{ day.date }}'; document.getElementById('selected-calendar-date').value = '{{ day.date }}'; htmx.trigger('body', 'searchUpdated')"
                     class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
-                        {% if day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
-                        {% elif day.is_today %} bg-accent-600 dark:bg-accent-200/90 text-white dark:text-accent-800 font-semibold shadow-sm
+                        {% if day.is_selected %} bg-accent-600 dark:bg-accent-100 text-white dark:text-accent-800 font-semibold shadow-sm outline outline-2 outline-white dark:outline-white
+                        {% elif day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
                         {% else %} text-muted-fg hover:bg-muted dark:hover:bg-muted{% endif %}">
-                    {% if day.is_today %}
-                    <span class="relative z-10">{{ day.day }}</span>
-                    <span class="absolute inset-0.5 rounded-lg ring-1 ring-inset ring-white/30"></span>
-                    {% else %}
                     {{ day.day }}
-                    {% endif %}
                 </button>
+                {% elif day.is_current_month and day.is_future %}
+                <div class="flex items-center justify-center w-full aspect-square text-[11px] text-muted-fg/40 dark:text-muted-fg/30 select-none">{{ day.day }}</div>
                 {% else %}
                 <div class="w-full aspect-square"></div>
                 {% endif %}
@@ -1739,22 +1876,19 @@ const CALENDAR_TEMPLATE: &str = r##"<div class="flex items-center justify-betwee
     {% for week in calendar_weeks %}
     <div class="col-span-7 grid grid-cols-7 gap-0.5">
         {% for day in week %}
-        {% if day.is_current_month %}
+        {% if day.is_current_month and not day.is_future %}
         <button hx-get="/search?date={{ day.date }}"
             hx-target="#timeline"
             hx-swap="innerHTML"
-            hx-on::after-request="htmx.trigger('body', 'searchUpdated')"
+            hx-on::after-request="_selectedCalendarDate='{{ day.date }}'; var d=document.getElementById('selected-calendar-date'); if(d)d.value='{{ day.date }}'; htmx.trigger('body', 'searchUpdated')"
             class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
-                {% if day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
-                {% elif day.is_today %} bg-accent-600 dark:bg-accent-200/90 text-white dark:text-accent-800 font-semibold shadow-sm
+                {% if day.is_selected %} bg-accent-600 dark:bg-accent-100 text-white dark:text-accent-800 font-semibold shadow-sm outline outline-2 outline-white dark:outline-white
+                {% elif day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
                 {% else %} text-muted-fg hover:bg-muted dark:hover:bg-muted{% endif %}">
-            {% if day.is_today %}
-            <span class="relative z-10">{{ day.day }}</span>
-            <span class="absolute inset-0.5 rounded-lg ring-1 ring-inset ring-white/30"></span>
-            {% else %}
             {{ day.day }}
-            {% endif %}
         </button>
+        {% elif day.is_current_month and day.is_future %}
+        <div class="flex items-center justify-center w-full aspect-square text-[11px] text-muted-fg/40 dark:text-muted-fg/30 select-none">{{ day.day }}</div>
         {% else %}
         <div class="w-full aspect-square"></div>
         {% endif %}
@@ -1765,8 +1899,8 @@ const CALENDAR_TEMPLATE: &str = r##"<div class="flex items-center justify-betwee
 
 const SHARE_NOTE_TEMPLATE: &str = r##"{% extends "base" %}
 {% block content %}
-<div class="flex items-center justify-center min-h-screen py-10">
-    <div class="w-full max-w-2xl mx-4 bg-card rounded-xl border border-border shadow-md p-6">
+<div class="flex items-center justify-center min-h-screen py-4 lg:py-10">
+    <div class="w-full max-w-2xl mx-3 lg:mx-4 bg-card rounded-xl border border-border shadow-md p-4 lg:p-6">
         <div class="flex items-center gap-2 mb-4 border-b border-border pb-3">
             <div class="avatar-initials bg-accent-100 text-accent-800 dark:bg-accent-900/30 dark:text-accent-400">
                 {{ avatar }}
@@ -1939,7 +2073,7 @@ const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
     <p class="text-xs text-muted-fg mt-4 pt-3 border-t border-border">{{ created_at }}</p>
 </div>"#;
 
-const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow group/memo">
+const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-3 lg:p-4 bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow group/memo">
     <div class="memo-display">
         <div class="flex items-center gap-2 mb-2">
             <div class="flex items-center gap-1.5 min-w-0">
@@ -1955,7 +2089,7 @@ const MEMO_FRAGMENT: &str = r##"<div id="memo-{{ id }}" class="p-4 bg-card round
                 </span>
                 {% endif %}
             </div>
-            <div class="ml-auto flex items-center gap-1 opacity-0 group-hover/memo:opacity-100 transition-opacity">
+            <div class="ml-auto flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover/memo:opacity-100 transition-opacity">
                 <button onclick="shareNote({{ id }}, '{{ visibility }}')"
                     class="p-1 rounded-md text-muted-fg hover:text-accent-500 hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-colors" title="Share">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1997,7 +2131,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
       ondragleave="event.preventDefault(); this.classList.remove('border-accent-500')"
       ondrop="event.preventDefault(); this.classList.remove('border-accent-500'); handleDrop(event)"
       onsubmit="document.getElementById('memo-edit-input-{{ id }}').value = getTiptapMarkdown();">
-    <div class="px-4 pt-3 pb-1 relative">
+    <div class="px-3 lg:px-4 pt-3 pb-1 relative">
         <div id="memo-edit-memo-editor-{{ id }}"
              class="w-full bg-transparent text-foreground text-base leading-snug min-h-[6rem] tiptap-editor max-w-none focus:outline-none"
              data-placeholder="What's on your mind..."
@@ -2008,7 +2142,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             <div id="attachment-preview-list" class="flex flex-col"></div>
         </div>
         <input type="hidden" name="content" id="memo-edit-input-{{ id }}" value="{{ content|e }}">
-        <p class="text-xs text-muted-fg text-center mt-2 select-none">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
+<p class="text-xs text-muted-fg text-center mt-2 select-none hidden lg:block">Use <kbd class="px-1 py-0.5 bg-muted border border-border rounded text-[10px] font-mono">/</kbd> slash commands or markdown syntax to format</p>
     </div>
     <script>
     (function() {
@@ -2193,13 +2327,13 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
         if (dd) updateVisUI(dd);
     })();
 </script>
-    <div class="flex items-center justify-between px-4 py-2 border-t border-border">
+    <div class="flex items-center justify-between px-3 lg:px-4 py-2 border-t border-border">
         <div class="flex items-center gap-1">
             <div class="relative">
                 <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </button>
-                <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-h-[200px] overflow-y-auto">
+                <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[200px] overflow-y-auto">
                     <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
                 </div>
             </div>
@@ -2207,7 +2341,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                 <button type="button" onclick="togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 </button>
-                <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px]">
+                <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px] max-w-[calc(100vw-2rem)]">
                     <button type="button" onclick="uploadImage()" class="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
                         <span>&#128247;</span> Upload Image
                     </button>
@@ -2248,7 +2382,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                 <input type="hidden" name="visibility" value="{{ visibility }}">
                 <input type="hidden" name="visibility_password" value="">
             </div>
-            <span class="text-xs text-muted-fg">Ctrl+Enter</span>
+            <span class="text-xs text-muted-fg hidden lg:inline">Ctrl+Enter</span>
         </div>
         <div class="flex items-center gap-2">
             <button type="button" onclick="cancelEdit({{ id }})"

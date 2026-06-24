@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   timeout: 60000,
   retries: 2,
-  workers: 1,
+  workers: undefined,
   use: {
     baseURL: 'http://localhost:3000',
     headless: true,
