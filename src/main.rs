@@ -732,7 +732,7 @@ async fn get_app_root(headers: HeaderMap, State(state): State<Arc<AppState>>) ->
         Some(id) => id,
         None => return Redirect::to("/login").into_response(),
     };
-    render_app_page(user_id, &state, "timeline", None).await
+    render_app_page(user_id, &state, "notes", None).await
 }
 
 async fn get_app_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -740,17 +740,11 @@ async fn get_app_timeline(headers: HeaderMap, State(state): State<Arc<AppState>>
         Some(id) => id,
         None => return Redirect::to("/login").into_response(),
     };
-    render_app_page(user_id, &state, "timeline", None).await
+    render_app_page(user_id, &state, "notes", None).await
 }
 
-async fn get_app_notes(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let user_id = match get_session_user_id(&headers) {
-        Some(id) => id,
-        None => return Redirect::to("/login").into_response(),
-    };
-    let sidebar_memos = state.db.get_sidebar_memos(user_id, 1).unwrap_or_default();
-    let first_note_id = sidebar_memos.first().map(|(id, _, _, _, _)| *id);
-    render_app_page(user_id, &state, "notes", first_note_id).await
+async fn get_app_notes() -> impl IntoResponse {
+    Redirect::to("/app/timeline")
 }
 
 async fn get_app_resources(headers: HeaderMap, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -1394,6 +1388,77 @@ async fn get_calendar(
     })).into_response()
 }
 
+async fn get_unified_sidebar(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let user = match state.db.get_user_by_id(user_id) {
+        Ok(Some(u)) => u,
+        _ => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let username = user.1;
+    let avatar = avatar_char(&username);
+    let offset: i64 = params.get("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
+    let limit: i64 = 30;
+    let memos = state.db.get_memos_paginated(user_id, limit + 1, offset).unwrap_or_default();
+    let has_more = memos.len() as i64 > limit;
+    let page_memos: Vec<_> = memos.into_iter().take(limit as usize).collect();
+    let notes: Vec<serde_json::Value> = page_memos.iter().map(|(id, _title, content, visibility, created_at)| {
+        let (title, _) = extract_title(content);
+        let tags = extract_tags(content);
+        let first_image_id = extract_first_image_id(content);
+        let search_text = {
+            let s = strip_html(content);
+            if s.len() > 500 { s[..500].to_string() } else { s }
+        };
+        let human_date = match chrono::NaiveDateTime::parse_from_str(created_at, "%Y-%m-%d %H:%M:%S") {
+            Ok(dt) => dt.format("%b %d, %Y %I:%M %p").to_string(),
+            Err(_) => created_at.clone(),
+        };
+        json!({
+            "id": id,
+            "title": title,
+            "tags": tags,
+            "first_image_id": first_image_id,
+            "created_at": human_date,
+            "visibility": visibility,
+            "search_text": search_text,
+        })
+    }).collect();
+    let partial = offset > 0;
+
+    // Calendar data
+    let now = chrono::Utc::now();
+    let year = now.year();
+    let month = now.month();
+    let memo_dates = state.db.get_memo_dates_in_month(user_id, year, month).unwrap_or_default();
+    let selected_date = params.get("selected_date").map(|s| s.as_str());
+    let calendar_weeks = generate_calendar(year, month, &memo_dates, selected_date);
+
+    // Tags
+    let tags = state.db.get_user_tags(user_id).unwrap_or_default();
+    let tag_list: Vec<serde_json::Value> = tags.iter().map(|(name, count)| {
+        json!({"name": name, "count": count})
+    }).collect();
+
+    state.templates.render("unified_sidebar", &json!({
+        "notes": notes,
+        "username": username,
+        "avatar": avatar,
+        "month_label": format!("{} {}", get_month_name(month), year),
+        "calendar_weeks": calendar_weeks,
+        "tags": tag_list,
+        "offset": offset,
+        "next_offset": if has_more { Some(offset + limit) } else { None },
+        "partial": partial,
+    })).into_response()
+}
+
 async fn get_sidebar_timeline(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
@@ -1456,6 +1521,7 @@ async fn main() {
         .route("/memos-feed", get(get_memos_feed))
         .route("/search", get(get_search))
         .route("/memos-json", get(get_memos_json))
+        .route("/unified-sidebar", get(get_unified_sidebar))
         .route("/sidebar-timeline", get(get_sidebar_timeline))
         .route("/calendar", get(get_calendar))
         .nest_service("/static", ServeDir::new("static"))

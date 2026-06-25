@@ -156,6 +156,7 @@ impl Database {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_sidebar_memos(&self, user_id: i64, limit: i64) -> rusqlite::Result<Vec<(i64, String, String, String, String)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(

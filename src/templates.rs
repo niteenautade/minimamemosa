@@ -511,22 +511,12 @@ function toggleMobileSidebar() {
     if (isOpen) {
         closeMobileSidebar();
     } else {
-        var path = window.location.pathname;
-        var endpoint, title;
-        if (path.indexOf('/notes') >= 0) {
-            endpoint = '/notes-panel';
-            title = 'Notes';
-        } else if (path.indexOf('/resources') >= 0) {
-            endpoint = '/resources-feed?offset=0';
-            title = 'Resources';
-        } else {
-            endpoint = '/sidebar-timeline' + (_selectedCalendarDate ? '?selected_date=' + encodeURIComponent(_selectedCalendarDate) : '');
-            title = 'Timeline';
-        }
+        var isResources = window.location.pathname === '/app/resources';
         var titleEl = document.getElementById('mobile-drawer-title');
-        if (titleEl) titleEl.textContent = title;
+        if (titleEl) titleEl.textContent = isResources ? 'Resources' : 'Notes';
         if (content) {
-            htmx.ajax('GET', endpoint, {target: '#mobile-sidebar-content', swap: 'innerHTML'});
+            var url = isResources ? '/resources-feed?offset=0' : '/unified-sidebar';
+            htmx.ajax('GET', url, {target: '#mobile-sidebar-content', swap: 'innerHTML'});
         }
         overlay.classList.remove('hidden');
         drawer.classList.remove('-translate-x-full');
@@ -582,6 +572,23 @@ function renderThemeOptions() {
     });
     _selectedTheme = saved;
 }
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.pathname === '/app/resources' && window.innerWidth < 1024) {
+        var content = document.getElementById('mobile-sidebar-content');
+        if (content) {
+            htmx.ajax('GET', '/resources-feed?offset=0', {target: '#mobile-sidebar-content', swap: 'innerHTML'});
+        }
+        var titleEl = document.getElementById('mobile-drawer-title');
+        if (titleEl) titleEl.textContent = 'Resources';
+        var overlay = document.getElementById('mobile-sidebar-overlay');
+        var drawer = document.getElementById('mobile-sidebar-drawer');
+        if (overlay) overlay.classList.remove('hidden');
+        if (drawer) {
+            drawer.classList.remove('-translate-x-full');
+            drawer.classList.add('translate-x-0');
+        }
+    }
+});
 </script>
 
 <!-- Mobile Sidebar Drawer -->
@@ -595,7 +602,7 @@ function renderThemeOptions() {
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
-        <div id="mobile-sidebar-content" class="flex-1 overflow-y-auto">
+        <div id="mobile-sidebar-content" class="flex-1 overflow-y-auto min-h-0">
             <!-- HTMX will load content here -->
         </div>
     </div>
@@ -711,18 +718,8 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     <div class="flex flex-1 overflow-hidden">
         <!-- Icon Bar -->
     <div class="w-14 flex-shrink-0 bg-card border-r border-border flex-col items-center py-3 gap-2 z-20 hidden lg:flex">
-        <a id="icon-timeline"
-            href="/app/timeline"
-            class="p-2.5 rounded-xl {% if active_panel == 'timeline' %}bg-accent-100 dark:bg-accent-200/80 text-accent-600 dark:text-accent-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
-            title="Timeline">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/>
-                <line x1="8" y1="10" x2="16" y2="10" stroke-width="2"/>
-                <line x1="8" y1="14" x2="14" y2="14" stroke-width="2"/>
-            </svg>
-        </a>
         <a id="icon-notes"
-            href="/app/notes"
+            href="/app"
             class="p-2.5 rounded-xl {% if active_panel == 'notes' %}bg-accent-100 dark:bg-accent-200/80 text-accent-600 dark:text-accent-800{% else %}text-muted-fg hover:bg-muted hover:text-foreground{% endif %} transition-colors"
             title="Notes">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -752,25 +749,17 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
     </div>
 
     <input type="hidden" id="selected-calendar-date" name="selected_date" value="">
-    <!-- Sidebar Panel (timeline view - search + calendar) -->
-    {% if not active_panel %}{% set active_panel = 'timeline' %}{% endif %}
-    <div id="sidebar-panel"
-        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full overflow-hidden hidden {% if active_panel == 'timeline' %}lg:flex{% else %}lg:hidden{% endif %}">
-        <div id="sidebar-content"
-            hx-trigger="load once"
-            hx-get="/sidebar-timeline"
+    {% if not active_panel %}{% set active_panel = 'notes' %}{% endif %}
+    <!-- Unified Sidebar (always visible on desktop, drawer on mobile) -->
+    <div id="unified-sidebar"
+        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full overflow-hidden hidden {% if active_panel != 'resources' %}lg:flex{% else %}lg:hidden{% endif %}">
+        <div id="unified-sidebar-content"
+            hx-trigger="load once, memoUpdated from:body"
+            hx-get="/unified-sidebar"
             hx-swap="innerHTML"
+            hx-on::after-settle="highlightActiveNote()"
             class="flex flex-col h-full">
         </div>
-    </div>
-
-    <!-- Notes Panel -->
-    <div id="notes-panel"
-        class="w-72 flex-shrink-0 bg-sidebar border-r border-border flex-col h-full hidden {% if active_panel == 'notes' %}lg:flex{% else %}lg:hidden{% endif %}"
-        hx-trigger="load once, memoUpdated from:body"
-        hx-get="/notes-panel"
-        hx-swap="innerHTML"
-        hx-on::after-settle="highlightActiveNote()">
     </div>
 
     <!-- Resources Panel -->
@@ -783,10 +772,23 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
     <!-- Main Content -->
     <div id="main-content" class="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+        <!-- "Back" bar (hidden when in feed state) -->
+        <div id="note-back-bar" class="hidden px-3 sm:px-4 lg:px-6 pt-3 flex-shrink-0">
+            <button onclick="backToFeed()"
+                class="flex items-center gap-1.5 text-sm text-muted-fg hover:text-foreground transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                Back to all notes
+            </button>
+        </div>
+
         <!-- Timeline View -->
         <div id="timeline-view" class="flex-1 flex flex-col overflow-hidden">
             <div class="flex-1 overflow-y-auto px-3 sm:px-4 lg:px-6 py-3 lg:py-5 pb-20 lg:pb-5">
                 <div class="max-w-2xl mx-auto">
+                     <!-- Editor (hidden when focused on a note) -->
+                     <div id="editor-section">
                      <!-- Notion-style Editor -->
                      <div class="max-w-2xl mx-auto mb-8">
                           <div class="bg-card dark:bg-card rounded-lg border border-border shadow-sm">
@@ -892,6 +894,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                              </form>
                          </div>
                      </div>
+                     </div>
 
                     <!-- Timeline -->
                     <div id="timeline" class="space-y-1"
@@ -956,17 +959,8 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
 <!-- Bottom Navigation (mobile only) -->
 <nav class="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border flex items-center justify-around py-2 px-4 lg:hidden safe-area-bottom">
-    <a href="/app/timeline"
-        class="flex flex-col items-center gap-0.5 p-1.5 {% if active_panel == 'timeline' %}text-accent-600 dark:text-accent-400{% else %}text-muted-fg{% endif %} transition-colors">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/>
-            <line x1="8" y1="10" x2="16" y2="10" stroke-width="2"/>
-            <line x1="8" y1="14" x2="14" y2="14" stroke-width="2"/>
-        </svg>
-        <span class="text-[10px]">Timeline</span>
-    </a>
-    <a href="/app/notes"
-        class="flex flex-col items-center gap-0.5 p-1.5 {% if active_panel == 'notes' %}text-accent-600 dark:text-accent-400{% else %}text-muted-fg{% endif %} transition-colors">
+    <a href="/app"
+        class="flex flex-col items-center gap-0.5 p-1.5 {% if active_panel != 'resources' %}text-accent-600 dark:text-accent-400{% else %}text-muted-fg{% endif %} transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="2"/>
             <polyline points="14 2 14 8 20 8" stroke-width="2"/>
@@ -1430,25 +1424,73 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     function highlightActiveNote() {
         var timeline = document.getElementById('timeline');
         var activeId = timeline ? timeline.getAttribute('data-active-note-id') : null;
-        if (!activeId) return;
-        document.querySelectorAll('#notes-panel [data-note-id]').forEach(function(el) {
+
+        document.querySelectorAll('#notes-list-container [data-note-id], #unified-sidebar-content [data-note-id]').forEach(function(el) {
             el.classList.remove('bg-accent-50', 'dark:bg-accent-900/20');
-            el.querySelector('.note-title')?.classList.remove('text-accent-600', 'dark:text-accent-600', 'font-semibold');
+            var title = el.querySelector('.note-title');
+            if (title) title.classList.remove('text-accent-600', 'dark:text-accent-600', 'font-semibold');
         });
-        var selected = document.querySelector('#notes-panel [data-note-id="' + activeId + '"]');
+
+        if (!activeId) return;
+
+        var selected = document.querySelector('#notes-list-container [data-note-id="' + activeId + '"]') ||
+                       document.querySelector('#unified-sidebar-content [data-note-id="' + activeId + '"]');
         if (selected) {
             selected.classList.add('bg-accent-50', 'dark:bg-accent-900/20');
-            selected.querySelector('.note-title')?.classList.add('text-accent-600', 'dark:text-accent-600', 'font-semibold');
+            var title = selected.querySelector('.note-title');
+            if (title) title.classList.add('text-accent-600', 'dark:text-accent-600', 'font-semibold');
         }
     }
     function openNote(id) {
         var timeline = document.getElementById('timeline');
-        if (timeline) timeline.setAttribute('data-active-note-id', id);
+        if (timeline) timeline.setAttribute('data-active-note-id', String(id));
         highlightActiveNote();
-        if (timeline && document.querySelector('#notes-panel:not(.hidden)')) {
-            htmx.ajax('GET', '/memos/' + id + '/fragment', { target: '#timeline', swap: 'innerHTML' });
-        }
+
+        var editorSection = document.getElementById('editor-section');
+        var backBar = document.getElementById('note-back-bar');
+        if (editorSection) editorSection.classList.add('hidden');
+        if (backBar) backBar.classList.remove('hidden');
+
+        htmx.ajax('GET', '/memos/' + id + '/fragment', { target: '#timeline', swap: 'innerHTML' });
+
+        closeMobileSidebar();
     }
+    function backToFeed() {
+        var editorSection = document.getElementById('editor-section');
+        var backBar = document.getElementById('note-back-bar');
+        if (editorSection) editorSection.classList.remove('hidden');
+        if (backBar) backBar.classList.add('hidden');
+
+        var timeline = document.getElementById('timeline');
+        if (timeline) timeline.removeAttribute('data-active-note-id');
+        highlightActiveNote();
+
+        htmx.ajax('GET', '/memos-feed', { target: '#timeline', swap: 'innerHTML' });
+    }
+    function toggleSection(sectionId, btn) {
+        var parent = btn ? btn.parentElement : document;
+        var section = parent.querySelector('#' + sectionId);
+        if (!section) return;
+        var isHidden = section.classList.contains('hidden');
+        section.classList.toggle('hidden');
+
+        var chevron = btn ? btn.querySelector('.section-chevron') : null;
+        if (chevron) {
+            chevron.classList.toggle('rotate-180', !isHidden);
+        }
+
+        localStorage.setItem('sidebar-' + sectionId, isHidden ? 'open' : 'closed');
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        ['calendar-section', 'tags-section'].forEach(function(id) {
+            var saved = localStorage.getItem('sidebar-' + id);
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (saved === 'open') {
+                el.classList.remove('hidden');
+            }
+        });
+    });
     function closeNote() {
         document.getElementById('note-detail-view').classList.add('hidden');
         document.getElementById('note-detail-view').innerHTML = '';
@@ -1513,6 +1555,12 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         var btn = document.querySelector('#memo-' + id + ' button[onclick*="deleteMemo"]');
         if (btn) btn.disabled = true;
         htmx.ajax('DELETE', '/memos/' + id, { target: '#memo-' + id, swap: 'outerHTML' });
+
+        var timeline = document.getElementById('timeline');
+        var activeId = timeline ? timeline.getAttribute('data-active-note-id') : null;
+        if (activeId && String(activeId) === String(id)) {
+            setTimeout(function() { backToFeed(); }, 300);
+        }
     }
     function toggleVisDropdown(btn) {
         var menu = btn.parentElement.querySelector('.vis-dropdown-menu');
@@ -2060,6 +2108,144 @@ const NOTES_PANEL_TEMPLATE: &str = r##"{% if partial %}
 </div>
 {% endif %}"##;
 
+const UNIFIED_SIDEBAR_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
+    <!-- Header -->
+    <div class="px-4 py-3 border-b border-border flex-shrink-0">
+        <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">Notes</h2>
+    </div>
+    <!-- Search -->
+    <div class="px-3 pt-3 pb-2 flex-shrink-0">
+        <input type="text" id="sidebar-search-input" name="q" placeholder="Search notes..."
+            hx-get="/search"
+            hx-target="#timeline"
+            hx-swap="innerHTML"
+            hx-trigger="keyup changed delay:400ms, search"
+            hx-on::before-request="if (this.value === '') { event.detail.pathInfo.requestPath = '/memos-feed' }"
+            hx-on::after-request="htmx.trigger('body', 'searchUpdated')"
+            oninput="debouncedFilterSidebar(this.value)"
+            class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all" />
+    </div>
+
+    <!-- Note List (primary content, scrollable) -->
+    <div class="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5" id="notes-list-container">
+        {% if notes %}
+            {% for note in notes %}
+            <div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}" onclick="openNote({{ note.id }})"
+                class="p-2.5 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between">
+                <div class="flex-1 min-w-0">
+                    <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
+                        {{ note.title }}
+                        {% if note.visibility == 'public' %}
+                        <svg class="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {% elif note.visibility == 'protected' %}
+                        <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-width="2"/></svg>
+                        {% endif %}
+                    </p>
+                    <p class="text-xs text-muted-fg mt-0.5">{{ note.created_at }}</p>
+                    {% if note.tags %}
+                    <div class="flex flex-wrap gap-1 mt-1.5">
+                        {% for tag in note.tags %}
+                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-500">#{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% if note.first_image_id %}
+                <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-muted dark:bg-muted">
+                    <img src="/resources/{{ note.first_image_id }}" class="w-full h-full object-cover" loading="lazy">
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-sm text-muted-fg p-3 text-center">No notes yet</p>
+        {% endif %}
+        {% if next_offset %}
+        <div id="sentinel-notes-{{ offset }}" class="h-4"
+             hx-get="/unified-sidebar?offset={{ next_offset }}"
+             hx-trigger="revealed"
+             hx-swap="outerHTML"></div>
+        {% endif %}
+    </div>
+
+    <!-- Calendar (collapsible) -->
+    <div class="border-t border-border flex-shrink-0">
+        <button onclick="toggleSection('calendar-section', this)"
+            class="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-fg uppercase tracking-wider hover:bg-muted/50 transition-colors">
+            <span>Calendar</span>
+            <div class="flex items-center gap-2">
+                <span class="text-muted-fg font-normal normal-case">{{ month_label }}</span>
+                <svg class="w-3 h-3 section-chevron transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+        </button>
+        <div id="calendar-section" class="hidden px-3 pb-2"
+             hx-trigger="searchUpdated from:body"
+             hx-get="/calendar"
+             hx-target="this"
+             hx-swap="innerHTML"
+             hx-include="#sidebar-search-input, #selected-calendar-date">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-muted-fg uppercase tracking-wider">{{ month_label }}</h3>
+            </div>
+            <div class="grid grid-cols-7 gap-0.5">
+                <div class="col-span-7 grid grid-cols-7 text-center text-xs text-muted-fg font-medium mb-0.5">
+                    <span class="py-0.5">Mon</span><span class="py-0.5">Tue</span><span class="py-0.5">Wed</span><span class="py-0.5">Thu</span><span class="py-0.5">Fri</span><span class="py-0.5">Sat</span><span class="py-0.5">Sun</span>
+                </div>
+                {% for week in calendar_weeks %}
+                <div class="col-span-7 grid grid-cols-7 gap-0.5">
+                    {% for day in week %}
+                    {% if day.is_current_month and not day.is_future %}
+                    <button hx-get="/search?date={{ day.date }}"
+                        hx-target="#timeline"
+                        hx-swap="innerHTML"
+                        hx-on::after-request="_selectedCalendarDate='{{ day.date }}'; var d=document.getElementById('selected-calendar-date'); if(d)d.value='{{ day.date }}'; htmx.trigger('body', 'searchUpdated')"
+                        class="relative flex items-center justify-center w-full aspect-square text-[11px] leading-none transition-colors rounded-lg
+                            {% if day.is_selected %} bg-accent-600 dark:bg-accent-100 text-white dark:text-accent-800 font-semibold shadow-sm outline outline-2 outline-white dark:outline-white
+                            {% elif day.has_memos %} text-accent-600 dark:text-accent-800 bg-accent-50 dark:bg-accent-200/80 font-medium hover:bg-accent-100 dark:hover:bg-accent-300/80
+                            {% else %} text-muted-fg hover:bg-muted dark:hover:bg-muted{% endif %}">
+                        {{ day.day }}
+                    </button>
+                    {% elif day.is_current_month and day.is_future %}
+                    <div class="flex items-center justify-center w-full aspect-square text-[11px] text-muted-fg/40 dark:text-muted-fg/30 select-none">{{ day.day }}</div>
+                    {% else %}
+                    <div class="w-full aspect-square"></div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Tags (collapsible) -->
+    <div class="border-t border-border flex-shrink-0">
+        <button onclick="toggleSection('tags-section', this)"
+            class="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-fg uppercase tracking-wider hover:bg-muted/50 transition-colors">
+            <span>Tags</span>
+            <div class="flex items-center gap-1.5">
+                <span class="text-muted-fg font-normal normal-case">{{ tags|length }}</span>
+                <svg class="w-3 h-3 section-chevron transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+        </button>
+        <div id="tags-section" class="hidden px-3 pb-2">
+            <div class="flex flex-wrap gap-1.5">
+                {% for tag in tags %}
+                <button hx-get="/search?tag={{ tag.name }}"
+                    hx-target="#timeline"
+                    hx-swap="innerHTML"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-accent-50 dark:bg-accent-900/30 text-accent-600 dark:text-accent-400 hover:bg-accent-100 dark:hover:bg-accent-900/50 transition-colors">
+                    #{{ tag.name }}
+                    <span class="text-xs text-accent-400 dark:text-accent-500">{{ tag.count }}</span>
+                </button>
+                {% endfor %}
+                {% if not tags %}
+                <p class="text-xs text-muted-fg">No tags yet. Use #tag in your notes.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>"##;
+
 const NOTE_DETAIL_TEMPLATE: &str = r#"<div>
     <a href="/app/timeline"
         class="flex items-center gap-1.5 text-sm text-muted-fg hover:text-foreground dark:hover:text-foreground mb-4 transition-colors">
@@ -2521,6 +2707,7 @@ impl Templates {
         env.add_template("memo_fragment", MEMO_FRAGMENT).unwrap();
         env.add_template("memo_edit_form", MEMO_EDIT_FORM).unwrap();
         env.add_template("resources_panel", RESOURCES_PANEL_TEMPLATE).unwrap();
+        env.add_template("unified_sidebar", UNIFIED_SIDEBAR_TEMPLATE).unwrap();
         env.add_template("sidebar_timeline", SIDEBAR_TIMELINE_TEMPLATE).unwrap();
         env.add_template("calendar", CALENDAR_TEMPLATE).unwrap();
         env.add_template("memos_feed", MEMOS_FEED_TEMPLATE).unwrap();
