@@ -195,10 +195,10 @@ test.describe('Notes & UI Flows', () => {
     await createNote(page, 'Note in notes panel');
 
     await page.click('#icon-notes');
-    await page.waitForURL(/\/app\/notes/);
+    await page.waitForURL(/\/app\/?$/);
 
-    await expect(page.locator('#notes-panel')).toBeVisible();
-    await expect(page.locator('#notes-panel')).toContainText('Notes');
+    await expect(page.locator('#unified-sidebar')).toBeVisible();
+    await expect(page.locator('#unified-sidebar-content')).toContainText('Notes');
   });
 
   test('should switch to resources panel', async ({ page }) => {
@@ -225,8 +225,8 @@ test.describe('Notes & UI Flows', () => {
     await createNote(page, 'Sidebar test note');
 
     await page.click('#icon-notes');
-    await page.waitForURL(/\/app\/notes/);
+    await page.waitForURL(/\/app\/?$/);
 
-    await expect(page.locator('#notes-panel input[placeholder*="Search"]')).toBeVisible();
+    await expect(page.locator('#unified-sidebar-content input[placeholder*="Search"]')).toBeVisible();
   });
 });

@@ -1501,18 +1501,22 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     var editorAttachments = [];
     function renderEditorAttachments() {}
     function uploadFilesForEditor(files) {
-        var input = document.getElementById('image-upload-input');
-        if (!input) { input = document.getElementById('file-upload-input'); }
-        if (input) {
-            var dt = new DataTransfer();
-            for (var i = 0; i < files.length; i++) dt.items.add(files[i]);
-            input.files = dt.files;
-            var form = input.closest('form');
-            if (form) {
-                var btn = form.querySelector('button[type="submit"]');
-                if (btn) btn.click();
-            }
-        }
+        var fd = new FormData();
+        for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
+        return fetch('/resources', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.resources && data.resources.length) {
+                    var ed = window.tiptapEditor;
+                    for (var j = 0; j < data.resources.length; j++) {
+                        var md = data.resources[j].markdown;
+                        if (ed) { ed.chain().focus().insertContent(md).run(); }
+                        else { insertContenteditable(md); }
+                    }
+                    htmx.trigger('body', 'memoUpdated');
+                }
+            })
+            .catch(function() { showToast('Upload failed', 'error'); });
     }
     function handleDrop(event) {
         var files = [];
@@ -1529,6 +1533,42 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
             }
         }
         if (files.length) uploadFilesForEditor(files);
+    }
+    function uploadFiles(files) {
+        var fd = new FormData();
+        for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
+        return fetch('/resources', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function() { refreshResourcesPanel(); htmx.trigger('body', 'memoUpdated'); })
+            .catch(function() { showToast('Upload failed', 'error'); });
+    }
+    function refreshResourcesPanel() {
+        var container = document.getElementById('resources-panel');
+        if (container) {
+            htmx.ajax('GET', '/resources-feed?offset=0', { target: '#resources-panel', swap: 'innerHTML' });
+        }
+    }
+    function updateBulkActions() {
+        var checked = document.querySelectorAll('.res-checkbox:checked').length;
+        var el = document.getElementById('bulk-actions');
+        if (el) el.classList.toggle('hidden', checked === 0);
+        var count = document.getElementById('selected-count');
+        if (count) count.textContent = checked;
+    }
+    function toggleSelectAll() {
+        var sel = document.getElementById('select-all');
+        document.querySelectorAll('.res-checkbox').forEach(function(cb) { cb.checked = sel.checked; });
+        updateBulkActions();
+    }
+    function deleteSelectedResources() {
+        var checked = document.querySelectorAll('.res-checkbox:checked');
+        var ids = [];
+        checked.forEach(function(cb) { ids.push(parseInt(cb.value)); });
+        if (!ids.length || !confirm('Delete ' + ids.length + ' resource(s)?')) return;
+        fetch('/resources/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) })
+            .then(function(r) { return r.json(); })
+            .then(function() { refreshResourcesPanel(); htmx.trigger('body', 'memoUpdated'); })
+            .catch(function() { showToast('Delete failed', 'error'); });
     }
     function editMemo(id) {
         var container = document.getElementById('memo-' + id);

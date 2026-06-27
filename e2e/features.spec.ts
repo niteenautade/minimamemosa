@@ -214,19 +214,27 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
      ═══════════════════════════════════════════ */
 
   test.describe('Calendar', () => {
-    test('calendar is visible in sidebar on timeline view', async ({ page }) => {
+    test('calendar toggle is visible in sidebar on timeline view', async ({ page }) => {
       await waitForTiptap(page);
       await expect(
-        page.locator('#sidebar-content button[hx-get*="search?date"]').first()
+        page.locator('#unified-sidebar-content button[onclick*="toggleSection"]').first()
       ).toBeVisible({ timeout: 10000 });
     });
 
     test('clicking a date with memos filters the timeline', async ({ page }) => {
       await createNote(page, 'Calendar test note');
+
+      // Expand the calendar section (starts hidden)
+      const toggleBtn = page.locator('#unified-sidebar-content button[onclick*="toggleSection"]').first();
+      await expect(toggleBtn).toBeVisible({ timeout: 10000 });
+      await toggleBtn.click();
+      await page.waitForTimeout(500);
+
+      // Now find today's date button inside the calendar grid
       const today = new Date();
       const todayStr = today.getDate().toString();
-      const todayBtn = page.locator('#sidebar-content button').filter({ hasText: todayStr }).first();
-      await expect(todayBtn).toBeVisible({ timeout: 10000 });
+      const todayBtn = page.locator('#calendar-section button[hx-get*="search?date"]').filter({ hasText: todayStr }).first();
+      await expect(todayBtn).toBeVisible({ timeout: 5000 });
       await todayBtn.click();
       await page.waitForTimeout(1200);
       await expect(page.locator('#timeline')).toContainText('Calendar test note');
@@ -303,7 +311,8 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
       expect(uploadOk).toBe(true);
 
       // Navigate away and back to refresh the panel
-      await page.click('#icon-timeline');
+      await page.click('#icon-notes');
+      await page.waitForURL(/\/app\/?$/);
       await page.waitForTimeout(500);
       await page.click('#icon-resources');
       await page.waitForURL(/\/app\/resources/);
@@ -323,7 +332,8 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
         fd.append('file', new Blob(['To be deleted'], { type: 'text/plain' }), 'delete-me.txt');
         await fetch('/resources', { method: 'POST', body: fd });
       });
-      await page.click('#icon-timeline');
+      await page.click('#icon-notes');
+      await page.waitForURL(/\/app\/?$/);
       await page.waitForTimeout(500);
       await page.click('#icon-resources');
       await page.waitForURL(/\/app\/resources/);
@@ -341,7 +351,8 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
       });
       expect(deleted).toBe(true);
 
-      await page.click('#icon-timeline');
+      await page.click('#icon-notes');
+      await page.waitForURL(/\/app\/?$/);
       await page.waitForTimeout(500);
       await page.click('#icon-resources');
       await page.waitForURL(/\/app\/resources/);
@@ -362,8 +373,8 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
         await fetch('/resources', { method: 'POST', body: fd });
       });
       // Navigate back to timeline (editor is now loaded and initialized)
-      await page.click('#icon-timeline');
-      await page.waitForURL(/\/app\/timeline/);
+      await page.click('#icon-notes');
+      await page.waitForURL(/\/app\/?$/);
       await page.waitForTimeout(1500);
 
       // Call insertContenteditable directly on the timeline page where editor exists
@@ -377,6 +388,88 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
         }
       });
       expect(inserted).toContain('test-image.png');
+    });
+
+    test('upload file via Resources panel Upload button without duplication', async ({ page }) => {
+      await waitForTiptap(page);
+      await page.click('#icon-resources');
+      await page.waitForURL(/\/app\/resources/);
+      await page.waitForTimeout(800);
+
+      // Initially one Upload button, one Resources title
+      await expect(page.locator('#resources-panel button:has-text("Upload")')).toHaveCount(1);
+      await expect(page.locator('#resources-panel h2:has-text("Resources")')).toHaveCount(1);
+
+      // Upload via the hidden file input (#file-input onchange -> uploadFiles)
+      await page.setInputFiles('#file-input', [
+        { name: 'ui-upload-test.txt', mimeType: 'text/plain', buffer: Buffer.from('uploaded via UI button') },
+      ]);
+      await page.waitForTimeout(2000);
+
+      // Verify file appears
+      await expect(page.locator('#resources-panel')).toContainText('ui-upload-test.txt');
+
+      // Verify no duplication after panel refresh
+      await expect(page.locator('#resources-panel button:has-text("Upload")')).toHaveCount(1);
+      await expect(page.locator('#resources-panel h2:has-text("Resources")')).toHaveCount(1);
+    });
+
+    test('select all and bulk delete resources', async ({ page }) => {
+      await waitForTiptap(page);
+      await page.click('#icon-resources');
+      await page.waitForURL(/\/app\/resources/);
+      await page.waitForTimeout(800);
+
+      // Upload two files sequentially
+      await page.setInputFiles('#file-input', [
+        { name: 'bulk-test-1.txt', mimeType: 'text/plain', buffer: Buffer.from('bulk1') },
+      ]);
+      await page.waitForTimeout(1500);
+      await expect(page.locator('#resources-panel')).toContainText('bulk-test-1');
+
+      await page.setInputFiles('#file-input', [
+        { name: 'bulk-test-2.txt', mimeType: 'text/plain', buffer: Buffer.from('bulk2') },
+      ]);
+      await page.waitForTimeout(1500);
+      await expect(page.locator('#resources-panel')).toContainText('bulk-test-2');
+
+      // Check first individual checkbox to reveal bulk actions, then use select-all
+      await page.locator('.res-checkbox').first().check({ force: true });
+      await page.waitForTimeout(300);
+      await page.locator('#select-all').check();
+      await page.waitForTimeout(500);
+
+      // Bulk actions bar should now be visible after toggleSelectAll runs
+      await expect(page.locator('#bulk-actions')).not.toHaveClass(/hidden/);
+
+      // Delete selected
+      page.once('dialog', async dialog => { await dialog.accept(); });
+      await page.locator('button:has-text("Delete Selected")').click();
+      await page.waitForTimeout(2000);
+
+      // Verify both files removed from panel
+      await expect(page.locator('#resources-panel')).not.toContainText('bulk-test-1');
+      await expect(page.locator('#resources-panel')).not.toContainText('bulk-test-2');
+    });
+
+    test('uploadFilesForEditor uploads file and inserts markdown into Tiptap', async ({ page }) => {
+      await waitForTiptap(page);
+
+      // Call uploadFilesForEditor with a file via page.evaluate to test the full pipeline
+      const inserted = await page.evaluate(async () => {
+        const f = new File(['drop-test-content'], 'drop-test-file.txt', { type: 'text/plain' });
+        // uploadFilesForEditor is a global function defined in the timeline template
+        if (typeof (window as any).uploadFilesForEditor !== 'function') return 'MISSING';
+        try {
+          await (window as any).uploadFilesForEditor([f]);
+        } catch { return 'ERROR'; }
+        // Wait briefly for the async upload + insert to complete
+        await new Promise(r => setTimeout(r, 1500));
+        const ed = (window as any).tiptapEditor;
+        return ed ? ed.getHTML() : 'NO_EDITOR';
+      });
+      // The markdown for a text file is [drop-test-file.txt](/resources/...)
+      expect(inserted).toContain('drop-test-file.txt');
     });
   });
 });

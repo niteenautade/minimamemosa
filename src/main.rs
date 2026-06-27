@@ -2108,6 +2108,7 @@ mod tests {
             let arr = w.as_array().unwrap();
             assert_eq!(arr.len(), 7);
         }
+    }
 
     #[test]
     fn test_generate_calendar_selected_date() {
@@ -2116,7 +2117,6 @@ mod tests {
             w.as_array().unwrap().iter().any(|d| d["is_selected"].as_bool().unwrap_or(false))
         });
         assert!(has_selected);
-    }
     }
 
     // ── process_memo_content Tests (basic without DB) ──
