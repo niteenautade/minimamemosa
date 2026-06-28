@@ -444,7 +444,7 @@ test.describe('Share, Markdown, Calendar, Search & Resources', () => {
 
       // Delete selected
       page.once('dialog', async dialog => { await dialog.accept(); });
-      await page.locator('button:has-text("Delete Selected")').click();
+      await page.locator('#resources-panel button:has-text("Delete Selected")').click();
       await page.waitForTimeout(2000);
 
       // Verify both files removed from panel

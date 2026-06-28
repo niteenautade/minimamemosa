@@ -229,4 +229,40 @@ test.describe('Notes & UI Flows', () => {
 
     await expect(page.locator('#unified-sidebar-content input[placeholder*="Search"]')).toBeVisible();
   });
+
+  test('should insert text above and below image when clicking on margins', async ({ page }) => {
+    await waitForTiptap(page);
+
+    // 1. Insert an image programmatically using a 1x1 pixel data URI
+    await page.evaluate(() => {
+      (window as any).tiptapEditor.commands.insertContent('<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" style="width: 200px; height: 150px;" />');
+    });
+
+    const img = page.locator('.ProseMirror img').first();
+    await expect(img).toBeVisible();
+
+    const box = await img.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      // 2. Click left side of the image
+      await page.mouse.click(box.x - 20, box.y + box.height / 2);
+      
+      // Type "Text Above"
+      await page.keyboard.type('Text Above', { delay: 10 });
+      
+      // Verify that the paragraph before the image has "Text Above"
+      const content = await page.locator('.ProseMirror').first().innerHTML();
+      expect(content).toContain('<p>Text Above</p>');
+
+      // 3. Click right side of the image
+      await page.mouse.click(box.x + box.width + 20, box.y + box.height / 2);
+
+      // Type "Text Below"
+      await page.keyboard.type('Text Below', { delay: 10 });
+
+      // Verify that the paragraph after the image has "Text Below"
+      const content2 = await page.locator('.ProseMirror').first().innerHTML();
+      expect(content2).toContain('<p>Text Below</p>');
+    }
+  });
 });

@@ -243,7 +243,8 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .tiptap-editor .ProseMirror table { border-collapse: collapse; margin: 0.25rem 0; width: 100%; }
         .tiptap-editor .ProseMirror th, .tiptap-editor .ProseMirror td { border: 1px solid var(--border); padding: 0.25rem 0.5rem; text-align: left; }
         .tiptap-editor .ProseMirror th { background: var(--muted); font-weight: 600; }
-        .tiptap-editor .ProseMirror img { max-width: 100%; height: auto; border-radius: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; }
+        .tiptap-editor .ProseMirror img { display: inline-block; vertical-align: bottom; max-width: 100%; height: auto; border-radius: 0.5rem; margin: 0.5rem 0; cursor: text; }
+        .tiptap-editor .ProseMirror p:has(img) { text-align: center; }
         #image-resize-menu { background: var(--card); border: 1px solid var(--border); border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; }
         #image-resize-menu button:hover { background: var(--muted); }
         .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted-fg); pointer-events: none; float: left; height: 0; }
@@ -793,9 +794,8 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                      <div class="max-w-2xl mx-auto mb-8">
                           <div class="bg-card dark:bg-card rounded-lg border border-border shadow-sm">
                               <form id="memo-form" hx-post="/memos"
-                                    hx-swap="afterbegin"
-                                    hx-target="#timeline"
-                                    hx-on::after-request="if(event.detail.successful){resetEditor();htmx.trigger('body','memoUpdated')}"
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful){ insertNewMemoIntoTimeline(event.detail.xhr.responseText); }"
                                     class="memo-editor relative"
                                     ondragover="event.preventDefault(); this.classList.add('border-accent-500')"
                                     ondragleave="event.preventDefault(); this.classList.remove('border-accent-500')"
@@ -1506,12 +1506,25 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         return fetch('/resources', { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
+                if (data.replaced && data.replaced.length) {
+                    for (var j = 0; j < data.replaced.length; j++) {
+                        showToast('"' + data.replaced[j].original_name + '" already exists — replaced', 'info');
+                    }
+                }
                 if (data.resources && data.resources.length) {
                     var ed = window.tiptapEditor;
                     for (var j = 0; j < data.resources.length; j++) {
                         var md = data.resources[j].markdown;
-                        if (ed) { ed.chain().focus().insertContent(md).run(); }
-                        else { insertContenteditable(md); }
+                        if (ed) {
+                            ed.chain().focus().insertContent(md).run();
+                            var lastNode = ed.state.doc.lastChild;
+                            if (!lastNode || lastNode.type.name === 'image' || lastNode.type.name === 'hardBreak') {
+                                ed.commands.insertContentAt(ed.state.doc.content.size, { type: 'paragraph' });
+                            }
+                            ed.commands.focus('end');
+                        } else {
+                            insertContenteditable(md);
+                        }
                     }
                     htmx.trigger('body', 'memoUpdated');
                 }
@@ -1539,7 +1552,15 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
         return fetch('/resources', { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
-            .then(function() { refreshResourcesPanel(); htmx.trigger('body', 'memoUpdated'); })
+            .then(function(data) {
+                if (data.replaced && data.replaced.length) {
+                    for (var j = 0; j < data.replaced.length; j++) {
+                        showToast('"' + data.replaced[j].original_name + '" already exists — replaced', 'info');
+                    }
+                }
+                refreshResourcesPanel();
+                htmx.trigger('body', 'memoUpdated');
+            })
             .catch(function() { showToast('Upload failed', 'error'); });
     }
     function refreshResourcesPanel() {
@@ -1568,6 +1589,49 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         fetch('/resources/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) })
             .then(function(r) { return r.json(); })
             .then(function() { refreshResourcesPanel(); htmx.trigger('body', 'memoUpdated'); })
+            .catch(function() { showToast('Delete failed', 'error'); });
+    }
+    function updateNoteBulkActions() {
+        var checked = document.querySelectorAll('.note-checkbox:checked').length;
+        var el = document.getElementById('note-bulk-actions');
+        if (el) el.classList.toggle('hidden', checked === 0);
+        var count = document.getElementById('note-selected-count');
+        if (count) count.textContent = checked;
+        document.querySelectorAll('.note-checkbox').forEach(function(cb) {
+            var row = cb.closest('[data-note-id]');
+            if (row) row.classList.toggle('bg-accent-50/30', cb.checked);
+            if (row) row.classList.toggle('dark:bg-accent-900/10', cb.checked);
+        });
+    }
+    function toggleSelectAllNotes() {
+        var sel = document.getElementById('note-select-all');
+        document.querySelectorAll('.note-checkbox').forEach(function(cb) {
+            cb.checked = sel.checked;
+            var row = cb.closest('[data-note-id]');
+            if (row) row.classList.toggle('bg-accent-50/30', cb.checked);
+            if (row) row.classList.toggle('dark:bg-accent-900/10', cb.checked);
+        });
+        updateNoteBulkActions();
+    }
+    function deleteSelectedNotes() {
+        var checked = document.querySelectorAll('.note-checkbox:checked');
+        var ids = [];
+        checked.forEach(function(cb) { ids.push(parseInt(cb.value)); });
+        if (!ids.length || !confirm('Delete ' + ids.length + ' note(s)?')) return;
+        fetch('/memos/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) })
+            .then(function(r) { return r.json(); })
+            .then(function() {
+                htmx.trigger('body', 'memoUpdated');
+                var timeline = document.getElementById('timeline');
+                if (timeline) {
+                    timeline.removeAttribute('data-active-note-id');
+                    htmx.ajax('GET', '/memos-feed', { target: '#timeline', swap: 'innerHTML' });
+                }
+                var editorSection = document.getElementById('editor-section');
+                if (editorSection) editorSection.classList.remove('hidden');
+                var backBar = document.getElementById('note-back-bar');
+                if (backBar) backBar.classList.add('hidden');
+            })
             .catch(function() { showToast('Delete failed', 'error'); });
     }
     function editMemo(id) {
@@ -1647,6 +1711,151 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         }
     }
 
+    function insertNewMemoIntoTimeline(html) {
+        var timeline = document.getElementById('timeline');
+        if (!timeline) return;
+
+        var emptyState = timeline.querySelector('.py-16');
+        if (emptyState) emptyState.remove();
+
+        var firstGroup = timeline.firstElementChild;
+        if (firstGroup && firstGroup.classList.contains('mb-4') && firstGroup.textContent.includes('Today')) {
+            var memosList = firstGroup.querySelector('.space-y-2');
+            if (memosList) {
+                memosList.insertAdjacentHTML('afterbegin', html);
+                var countSpan = firstGroup.querySelector('.font-mono');
+                if (countSpan) {
+                    var count = parseInt(countSpan.textContent) || 0;
+                    countSpan.textContent = count + 1;
+                }
+                resetEditor();
+                htmx.trigger('body', 'memoUpdated');
+                return;
+            }
+        }
+
+        var d = new Date();
+        var year = d.getFullYear();
+        var month = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        var todayDateStr = year + '-' + month + '-' + day;
+
+        var newGroupHtml = 
+            '<div class="mb-4">' +
+                '<div class="flex items-center gap-2 mb-3">' +
+                    '<span class="text-xs font-medium text-muted-fg uppercase tracking-wider">Today</span>' +
+                    '<span class="text-xs text-muted-fg">' + todayDateStr + '</span>' +
+                    '<div class="flex-1 border-t border-border"></div>' +
+                    '<span class="text-xs text-muted-fg font-mono">1</span>' +
+                '</div>' +
+                '<div class="space-y-2">' +
+                    html +
+                '</div>' +
+            '</div>';
+
+        timeline.insertAdjacentHTML('afterbegin', newGroupHtml);
+        resetEditor();
+        htmx.trigger('body', 'memoUpdated');
+    }
+
+    function handleEditorImageClick(view, pos, event) {
+        var img = event.target;
+        if (img.tagName !== 'IMG') {
+            var images = view.dom.querySelectorAll('img');
+            for (var i = 0; i < images.length; i++) {
+                var rect = images[i].getBoundingClientRect();
+                if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
+                    img = images[i];
+                    break;
+                }
+            }
+        }
+        if (img && img.tagName === 'IMG') {
+            var rect = img.getBoundingClientRect();
+            var isLeft = event.clientX < rect.left;
+            var isRight = event.clientX > rect.right;
+            if (isLeft || isRight) {
+                event.preventDefault();
+                var imgPos = view.posAtDOM(img, 0);
+                if (imgPos !== null && imgPos !== undefined) {
+                    var ed = view.editor || window.tiptapEditor;
+                    if (ed) {
+                        if (isLeft) {
+                            ed.commands.setTextSelection(imgPos);
+                        } else {
+                            var nodeSize = view.state.doc.nodeAt(imgPos).nodeSize;
+                            ed.commands.setTextSelection(imgPos + nodeSize);
+                        }
+                        view.focus();
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function handleEditorImageTextInput(view, from, to, text) {
+        var $from = view.state.selection.$from;
+        if ($from.nodeAfter && $from.nodeAfter.type.name === 'image') {
+            var blockPos = $from.before(1);
+            var ed = view.editor || window.tiptapEditor;
+            if (ed) {
+                ed.chain()
+                  .insertContentAt(blockPos, { type: 'paragraph', content: [{ type: 'text', text: text }] })
+                  .setTextSelection(blockPos + 1 + text.length)
+                  .focus()
+                  .run();
+                return true;
+            }
+        }
+        if ($from.nodeBefore && $from.nodeBefore.type.name === 'image') {
+            var blockPos = $from.after(1);
+            var ed = view.editor || window.tiptapEditor;
+            if (ed) {
+                ed.chain()
+                  .insertContentAt(blockPos, { type: 'paragraph', content: [{ type: 'text', text: text }] })
+                  .setTextSelection(blockPos + 1 + text.length)
+                  .focus()
+                  .run();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function handleEditorImagePaste(view, event, slice) {
+        var $from = view.state.selection.$from;
+        var text = slice ? slice.content.textBetween(0, slice.content.size) : '';
+        if (!text) return false;
+        
+        if ($from.nodeAfter && $from.nodeAfter.type.name === 'image') {
+            var blockPos = $from.before(1);
+            var ed = view.editor || window.tiptapEditor;
+            if (ed) {
+                ed.chain()
+                  .insertContentAt(blockPos, { type: 'paragraph', content: [{ type: 'text', text: text }] })
+                  .setTextSelection(blockPos + 1 + text.length)
+                  .focus()
+                  .run();
+                return true;
+            }
+        }
+        if ($from.nodeBefore && $from.nodeBefore.type.name === 'image') {
+            var blockPos = $from.after(1);
+            var ed = view.editor || window.tiptapEditor;
+            if (ed) {
+                ed.chain()
+                  .insertContentAt(blockPos, { type: 'paragraph', content: [{ type: 'text', text: text }] })
+                  .setTextSelection(blockPos + 1 + text.length)
+                  .focus()
+                  .run();
+                return true;
+            }
+        }
+        return false;
+    }
+
     /* ── Tiptap Init (loaded from local bundle) ── */
     (function() {
         var mountEl = document.getElementById('memo-editor');
@@ -1659,9 +1868,11 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
             var CodeBlockLowlight = window.Tiptap.CodeBlockLowlight;
             var lowlight = window.Tiptap.lowlight;
             var ImageExt = window.Tiptap.Image.extend({
-                addAttributes() { return { src: { default: null }, alt: { default: null }, title: { default: null }, style: { default: 'width: 100%' } } },
-                parseHTML() { return [{ tag: 'img[src]', getAttrs: function(dom) { var src=dom.getAttribute('src')||''; var style=dom.getAttribute('style')||'width: 100%'; var q=src.indexOf('?'); if(q>=0){var p=src.substring(q+1).split('&');for(var i=0;i<p.length;i++){var kv=p[i].split('=');if(kv[0]==='w'){var v=parseFloat(kv[1]);if(!isNaN(v)&&v>0&&v<100){style='width: '+v+'%'}}}} return{src:src,alt:dom.getAttribute('alt')||'',title:dom.getAttribute('title')||'',style:style} } }]; },
-                renderHTML({node}) { var src=node.attrs.src||''; var alt=node.attrs.alt||''; var title=node.attrs.title||''; var style=node.attrs.style||'width: 100%'; return ['img',{src:src,alt:alt,title:title,style:style}] },
+                inline: true,
+                group: 'inline',
+                addAttributes() { return { src: { default: null }, alt: { default: null }, title: { default: null }, style: { default: 'width: 75%' } } },
+                parseHTML() { return [{ tag: 'img[src]', getAttrs: function(dom) { var src=dom.getAttribute('src')||''; var style=null; var q=src.indexOf('?'); if(q>=0){var p=src.substring(q+1).split('&');for(var i=0;i<p.length;i++){var kv=p[i].split('=');if(kv[0]==='w'){var v=parseFloat(kv[1]);if(!isNaN(v)&&v>0&&v<100){style='width: '+v+'%'}}}} return{src:src,alt:dom.getAttribute('alt')||'',title:dom.getAttribute('title')||'',style:style} } }]; },
+                renderHTML({node}) { var src=node.attrs.src||''; var alt=node.attrs.alt||''; var title=node.attrs.title||''; var style=node.attrs.style||'width: 75%'; return ['img',{src:src,alt:alt,title:title,style:style}] },
             });
             var LinkExt = window.Tiptap.Link;
             var TableExt = window.Tiptap.Table;
@@ -1677,58 +1888,68 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
             mountEl.removeAttribute('data-empty');
             mountEl.oninput = null;
             mountEl.onkeydown = null;
+            mountEl.addEventListener('click', function(e) {
+                if (window.tiptapEditor && !e.target.closest('.ProseMirror')) {
+                    window.tiptapEditor.commands.focus('end');
+                }
+            });
             window.tiptapEditor = new Editor({
                 element: mountEl,
  extensions: [
-                     StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
-                     Placeholder.configure({ placeholder: "What's on your mind..." }),
-                     Markdown,
-                     CodeBlockLowlight.configure({ lowlight: lowlight }),
-                     ImageExt,
-                     LinkExt.configure({ openOnClick: false }),
-                     TableExt,
-                     TableRowExt,
-                     TableCellExt,
-                     TableHeaderExt,
-                     TaskListExt,
-                     TaskItemExt.configure({ nested: true }),
-                 ],
-                editorProps: {
-                    attributes: { class: 'focus:outline-none text-base leading-snug' },
-                    handleDrop: function(view, event, slice, moved) {
-                        if (event.dataTransfer && event.dataTransfer.items && event.dataTransfer.items.length) {
-                            var files = [];
-                            for (var i = 0; i < event.dataTransfer.items.length; i++) {
-                                if (event.dataTransfer.items[i].kind === 'file') {
-                                    var f = event.dataTransfer.items[i].getAsFile();
-                                    if (f) files.push(f);
-                                }
-                            }
-                            if (files.length) { uploadFilesForEditor(files); event.preventDefault(); return true; }
-                        }
-                        return false;
-                    },
-                    handlePaste: function(view, event) {
-                        if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length) {
-                            event.preventDefault(); event.stopPropagation();
-                            uploadFilesForEditor(event.clipboardData.files);
-                            return true;
-                        }
-                        return false;
-                    },
-                    handleClick: function(view, pos, event) {
-                        if (event.target && event.target.tagName === 'IMG') {
-                            event.preventDefault();
-                            var imgPos = view.posAtDOM(event.target, 0);
-                            if (imgPos !== null && imgPos !== undefined) pos = imgPos;
-                            _clickedImgView = view;
-                            _clickedImgPos = pos;
-                            showImageResizeMenu(event.target, event.clientX, event.clientY);
-                            return true;
-                        }
-                        return false;
-                    },
-                    handleKeyDown: function(view, event) {
+                      StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
+                      Placeholder.configure({ placeholder: "What's on your mind..." }),
+                      Markdown,
+                      CodeBlockLowlight.configure({ lowlight: lowlight }),
+                      ImageExt,
+                      LinkExt.configure({ openOnClick: false }),
+                      TableExt,
+                      TableRowExt,
+                      TableCellExt,
+                      TableHeaderExt,
+                      TaskListExt,
+                      TaskItemExt.configure({ nested: true }),
+                  ],
+                 editorProps: {
+                     attributes: { class: 'focus:outline-none text-base leading-snug' },
+                     handleDrop: function(view, event, slice, moved) {
+                         if (event.dataTransfer && event.dataTransfer.items && event.dataTransfer.items.length) {
+                             var files = [];
+                             for (var i = 0; i < event.dataTransfer.items.length; i++) {
+                                 if (event.dataTransfer.items[i].kind === 'file') {
+                                     var f = event.dataTransfer.items[i].getAsFile();
+                                     if (f) files.push(f);
+                                 }
+                             }
+                             if (files.length) { uploadFilesForEditor(files); event.preventDefault(); return true; }
+                         }
+                         return false;
+                     },
+                      handlePaste: function(view, event, slice) {
+                          if (handleEditorImagePaste(view, event, slice)) {
+                              return true;
+                          }
+                          if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length) {
+                              event.preventDefault(); event.stopPropagation();
+                              uploadFilesForEditor(event.clipboardData.files);
+                              return true;
+                          }
+                          return false;
+                      },
+                      handleClick: handleEditorImageClick,
+                      handleTextInput: handleEditorImageTextInput,
+                       handleDoubleClick: function(view, pos, event) {
+                           if (event.target && event.target.tagName === 'IMG') {
+                               event.preventDefault();
+                              var imgPos = view.posAtDOM(event.target, 0);
+                              if (imgPos !== null && imgPos !== undefined) pos = imgPos;
+                              _clickedImgView = view;
+                              _clickedImgPos = pos;
+                              showImageResizeMenu(event.target, event.clientX, event.clientY);
+                              return true;
+                          }
+                          return false;
+                      },
+                     handleKeyDown: function(view, event) {
                         var _sm = document.getElementById('slash-menu');
                         if (_sm && !_sm.classList.contains('hidden')) {
                             if (event.key === 'ArrowDown') {
@@ -2166,12 +2387,27 @@ const UNIFIED_SIDEBAR_TEMPLATE: &str = r##"<div class="flex flex-col h-full">
             class="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground placeholder-muted-fg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all" />
     </div>
 
+    <!-- Bulk Actions -->
+    <div id="note-bulk-actions" class="hidden px-3 py-1.5 border-b border-border flex-shrink-0 flex items-center justify-between bg-muted/20">
+        <label class="flex items-center gap-1.5 text-xs text-muted-fg cursor-pointer">
+            <input type="checkbox" id="note-select-all" onchange="toggleSelectAllNotes()" class="rounded border-border">
+            Select All
+        </label>
+        <button onclick="deleteSelectedNotes()" class="px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors">
+            Delete Selected (<span id="note-selected-count">0</span>)
+        </button>
+    </div>
+
     <!-- Note List (primary content, scrollable) -->
     <div class="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5" id="notes-list-container">
         {% if notes %}
             {% for note in notes %}
-            <div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}" onclick="openNote({{ note.id }})"
-                class="p-2.5 rounded-lg hover:bg-muted cursor-pointer transition-colors flex gap-3 items-start justify-between">
+            <div data-note-id="{{ note.id }}" data-title="{{ note.title|e }}" data-search="{{ note.search_text|e }}"
+                class="p-2.5 rounded-lg hover:bg-muted transition-colors flex gap-1.5 items-start group cursor-pointer"
+                onclick="if(!event.target.closest('.note-checkbox-wrap'))openNote({{ note.id }})">
+                <div class="note-checkbox-wrap pt-0.5 flex-shrink-0">
+                    <input type="checkbox" class="note-checkbox rounded border-border/60" value="{{ note.id }}" onchange="updateNoteBulkActions()">
+                </div>
                 <div class="flex-1 min-w-0">
                     <p class="note-title text-sm font-medium text-foreground truncate flex items-center gap-1.5">
                         {{ note.title }}
@@ -2382,9 +2618,11 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             var CodeBlockLowlight = window.Tiptap.CodeBlockLowlight;
             var lowlight = window.Tiptap.lowlight;
             var ImageExt = window.Tiptap.Image.extend({
-                addAttributes() { return { src: { default: null }, alt: { default: null }, title: { default: null }, style: { default: 'width: 100%' } } },
-                parseHTML() { return [{ tag: 'img[src]', getAttrs: function(dom) { var src=dom.getAttribute('src')||''; var style=dom.getAttribute('style')||'width: 100%'; var q=src.indexOf('?'); if(q>=0){var p=src.substring(q+1).split('&');for(var i=0;i<p.length;i++){var kv=p[i].split('=');if(kv[0]==='w'){var v=parseFloat(kv[1]);if(!isNaN(v)&&v>0&&v<100){style='width: '+v+'%'}}}} return{src:src,alt:dom.getAttribute('alt')||'',title:dom.getAttribute('title')||'',style:style} } }]; },
-                renderHTML({node}) { var src=node.attrs.src||''; var alt=node.attrs.alt||''; var title=node.attrs.title||''; var style=node.attrs.style||'width: 100%'; return ['img',{src:src,alt:alt,title:title,style:style}] },
+                inline: true,
+                group: 'inline',
+                addAttributes() { return { src: { default: null }, alt: { default: null }, title: { default: null }, style: { default: 'width: 75%' } } },
+                parseHTML() { return [{ tag: 'img[src]', getAttrs: function(dom) { var src=dom.getAttribute('src')||''; var style=null; var q=src.indexOf('?'); if(q>=0){var p=src.substring(q+1).split('&');for(var i=0;i<p.length;i++){var kv=p[i].split('=');if(kv[0]==='w'){var v=parseFloat(kv[1]);if(!isNaN(v)&&v>0&&v<100){style='width: '+v+'%'}}}} return{src:src,alt:dom.getAttribute('alt')||'',title:dom.getAttribute('title')||'',style:style} } }]; },
+                renderHTML({node}) { var src=node.attrs.src||''; var alt=node.attrs.alt||''; var title=node.attrs.title||''; var style=node.attrs.style||'width: 75%'; return ['img',{src:src,alt:alt,title:title,style:style}] },
             });
             var LinkExt = window.Tiptap.Link;
             var TableExt = window.Tiptap.Table;
@@ -2403,55 +2641,60 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             window.tiptapEditor = new Editor({
                 element: mountEl,
                 extensions: [
-                    StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
-                    Placeholder.configure({ placeholder: "What's on your mind..." }),
-                    Markdown,
-                    CodeBlockLowlight.configure({ lowlight: lowlight }),
-                    ImageExt,
-                    LinkExt.configure({ openOnClick: false }),
-                    TableExt,
-                    TableRowExt,
-                    TableCellExt,
-                    TableHeaderExt,
-                    TaskListExt,
-                    TaskItemExt.configure({ nested: true }),
-                ],
-                editorProps: {
-                    attributes: { class: 'focus:outline-none text-base leading-snug' },
-                    handleDrop: function(view, event, slice, moved) {
-                        if (event.dataTransfer && event.dataTransfer.items && event.dataTransfer.items.length) {
-                            var files = [];
-                            for (var i = 0; i < event.dataTransfer.items.length; i++) {
-                                if (event.dataTransfer.items[i].kind === 'file') {
-                                    var f = event.dataTransfer.items[i].getAsFile();
-                                    if (f) files.push(f);
-                                }
-                            }
-                            if (files.length) { uploadFilesForEditor(files); event.preventDefault(); return true; }
-                        }
-                        return false;
-                    },
-                    handlePaste: function(view, event) {
-                        if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length) {
-                            event.preventDefault(); event.stopPropagation();
-                            uploadFilesForEditor(event.clipboardData.files);
-                            return true;
-                        }
-                        return false;
-                    },
-                    handleClick: function(view, pos, event) {
-                        if (event.target && event.target.tagName === 'IMG') {
-                            event.preventDefault();
-                            var imgPos = view.posAtDOM(event.target, 0);
-                            if (imgPos !== null && imgPos !== undefined) pos = imgPos;
-                            _clickedImgView = view;
-                            _clickedImgPos = pos;
-                            showImageResizeMenu(event.target, event.clientX, event.clientY);
-                            return true;
-                        }
-                        return false;
-                    },
-                    handleKeyDown: function(view, event) {
+                      StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
+                      Placeholder.configure({ placeholder: "What's on your mind..." }),
+                      Markdown,
+                      CodeBlockLowlight.configure({ lowlight: lowlight }),
+                      ImageExt,
+                      LinkExt.configure({ openOnClick: false }),
+                      TableExt,
+                      TableRowExt,
+                      TableCellExt,
+                      TableHeaderExt,
+                      TaskListExt,
+                      TaskItemExt.configure({ nested: true }),
+                  ],
+                 editorProps: {
+                     attributes: { class: 'focus:outline-none text-base leading-snug' },
+                     handleDrop: function(view, event, slice, moved) {
+                         if (event.dataTransfer && event.dataTransfer.items && event.dataTransfer.items.length) {
+                             var files = [];
+                             for (var i = 0; i < event.dataTransfer.items.length; i++) {
+                                 if (event.dataTransfer.items[i].kind === 'file') {
+                                     var f = event.dataTransfer.items[i].getAsFile();
+                                     if (f) files.push(f);
+                                 }
+                             }
+                             if (files.length) { uploadFilesForEditor(files); event.preventDefault(); return true; }
+                         }
+                         return false;
+                     },
+                      handlePaste: function(view, event, slice) {
+                          if (handleEditorImagePaste(view, event, slice)) {
+                              return true;
+                          }
+                          if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length) {
+                              event.preventDefault(); event.stopPropagation();
+                              uploadFilesForEditor(event.clipboardData.files);
+                              return true;
+                          }
+                          return false;
+                      },
+                      handleClick: handleEditorImageClick,
+                      handleTextInput: handleEditorImageTextInput,
+                       handleDoubleClick: function(view, pos, event) {
+                           if (event.target && event.target.tagName === 'IMG') {
+                               event.preventDefault();
+                              var imgPos = view.posAtDOM(event.target, 0);
+                              if (imgPos !== null && imgPos !== undefined) pos = imgPos;
+                              _clickedImgView = view;
+                              _clickedImgPos = pos;
+                              showImageResizeMenu(event.target, event.clientX, event.clientY);
+                              return true;
+                          }
+                          return false;
+                      },
+                     handleKeyDown: function(view, event) {
                         var _sm = document.getElementById('slash-menu');
                         if (_sm && !_sm.classList.contains('hidden')) {
                             if (event.key === 'ArrowDown') {

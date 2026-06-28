@@ -365,6 +365,18 @@ impl Database {
         Ok(())
     }
 
+    pub fn find_resource_by_original_name(&self, user_id: i64, original_name: &str) -> rusqlite::Result<Option<(i64, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, filename FROM resources WHERE user_id = ?1 AND original_name = ?2"
+        )?;
+        let mut rows = stmt.query(params![user_id, original_name])?;
+        match rows.next()? {
+            Some(row) => Ok(Some((row.get(0)?, row.get(1)?))),
+            None => Ok(None),
+        }
+    }
+
     pub fn get_resource_public(&self, resource_id: i64) -> rusqlite::Result<Option<(i64, String, String, String, i64, i64)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(

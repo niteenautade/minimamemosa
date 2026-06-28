@@ -68,40 +68,79 @@ fn process_memo_content(
     db: &db::Database,
     content: &str,
 ) -> (String, Vec<serde_json::Value>) {
-    let mut resources = Vec::new();
-    let mut remaining = content;
-    
-    while !remaining.is_empty() {
+    let mut resources: Vec<serde_json::Value> = Vec::new();
+    let mut cleaned = String::with_capacity(content.len());
+    let mut last_end = 0;
+    let mut search_pos = 0;
+
+    while search_pos < content.len() {
+        let remaining = &content[search_pos..];
         if let Some(pos) = remaining.find("/resources/") {
-            let id_start = pos + "/resources/".len();
-            let sub = &remaining[id_start..];
-            if let Some(end_bracket_idx) = sub.find(')') {
-                let id_str = &sub[..end_bracket_idx];
-                if let Ok(id) = id_str.parse::<i64>() {
-                    if let Ok(Some(r)) = db.get_resource_public(id) {
+            let abs_pos = search_pos + pos;
+            let id_start = abs_pos + "/resources/".len();
+            let after = &content[id_start..];
+
+            let id_len = after.chars().take_while(|c| c.is_ascii_digit()).count();
+            if id_len > 0 {
+                let id: i64 = after[..id_len].parse().unwrap();
+                let after_id = &after[id_len..];
+
+                let ref_end_offset = after_id.find(')')
+                    .or_else(|| after_id.find('>'))
+                    .or_else(|| after_id.find('"'));
+
+                if let Some(eo) = ref_end_offset {
+                    let full_ref_end = id_start + id_len + eo + 1;
+                    let resource = db.get_resource_public(id).ok().flatten();
+
+                    if let Some(r) = resource {
                         let is_img = r.3.starts_with("image/");
-                        let size_formatted = format_bytes(r.4);
                         resources.push(json!({
                             "id": r.0,
                             "filename": r.1,
                             "original_name": r.2,
                             "mime_type": r.3,
                             "is_image": is_img,
-                            "size": size_formatted,
+                            "size": format_bytes(r.4),
                         }));
+                        cleaned.push_str(&content[last_end..full_ref_end]);
+                    } else {
+                        let before = &content[last_end..abs_pos];
+                        let mut ref_start = None;
+                        if let Some(cb) = before.rfind(']') {
+                            let before_cb = &before[..cb];
+                            if let Some(ob) = before_cb.rfind('[') {
+                                ref_start = Some(last_end + ob);
+                            }
+                        }
+                        if ref_start.is_none() {
+                            if let Some(ts) = before.rfind('<') {
+                                ref_start = Some(last_end + ts);
+                            }
+                        }
+                        if let Some(rs) = ref_start {
+                            cleaned.push_str(&content[last_end..rs]);
+                        } else {
+                            cleaned.push_str(&content[last_end..abs_pos]);
+                        }
                     }
-                    let link_end = id_start + end_bracket_idx + 1;
-                    remaining = &remaining[link_end..];
+
+                    last_end = full_ref_end;
+                    search_pos = full_ref_end;
                     continue;
                 }
             }
-            remaining = &remaining[pos + "/resources/".len()..];
+            search_pos = abs_pos + "/resources/".len();
         } else {
             break;
         }
     }
-    
-    (content.trim().to_string(), resources)
+
+    if last_end < content.len() {
+        cleaned.push_str(&content[last_end..]);
+    }
+
+    (cleaned.trim().to_string(), resources)
 }
 
 fn extract_first_image_id(content: &str) -> Option<i64> {
@@ -922,6 +961,30 @@ async fn delete_memo(
     }
 }
 
+async fn bulk_delete_memos(
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = match get_session_user_id(&headers) {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "unauthorized"}))).into_response(),
+    };
+    let ids = match payload.get("ids").and_then(|v| v.as_array()) {
+        Some(arr) => arr,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "ids required"}))).into_response(),
+    };
+    let mut deleted = 0;
+    for id_val in ids {
+        if let Some(id) = id_val.as_i64() {
+            if state.db.delete_memo(id, user_id).is_ok() {
+                deleted += 1;
+            }
+        }
+    }
+    (StatusCode::OK, Json(json!({"deleted": deleted}))).into_response()
+}
+
 fn resource_storage_dir() -> PathBuf {
     let base = std::env::var("DATABASE_PATH").unwrap_or_else(|_| "data/minimamemosa.db".to_string());
     let dir = std::path::Path::new(&base).parent().unwrap_or(std::path::Path::new("data"));
@@ -940,6 +1003,7 @@ async fn post_resources(
     let storage = resource_storage_dir();
     tokio::fs::create_dir_all(&storage).await.ok();
     let mut resources = Vec::new();
+    let mut replaced = Vec::new();
     while let Ok(Some(field)) = multipart.next_field().await {
         let original_name = field.file_name().unwrap_or("file").to_string();
         let mime_type = field.content_type().unwrap_or("application/octet-stream").to_string();
@@ -948,6 +1012,14 @@ async fn post_resources(
             Err(_) => continue,
         };
         let size = data.len() as i64;
+
+        if let Ok(Some((old_id, old_filename))) = state.db.find_resource_by_original_name(user_id, &original_name) {
+            let old_filepath = storage.join(&old_filename);
+            tokio::fs::remove_file(&old_filepath).await.ok();
+            let _ = state.db.delete_resource(old_id, user_id);
+            replaced.push(json!({"id": old_id, "original_name": &original_name}));
+        }
+
         let ext = std::path::Path::new(&original_name).extension()
             .and_then(|e| e.to_str()).unwrap_or("bin");
         let filename = format!("{}.{}", uuid_v4(), ext);
@@ -977,7 +1049,7 @@ async fn post_resources(
             }
         }
     }
-    (StatusCode::OK, Json(json!({"resources": resources}))).into_response()
+    (StatusCode::OK, Json(json!({"resources": resources, "replaced": replaced}))).into_response()
 }
 
 fn uuid_v4() -> String {
@@ -1051,7 +1123,7 @@ async fn get_resource(
     );
     resp_headers.insert(
         header::CACHE_CONTROL,
-        header::HeaderValue::from_static("public, max-age=31536000"),
+        header::HeaderValue::from_static("no-cache, must-revalidate"),
     );
     (resp_headers, data).into_response()
 }
@@ -1509,6 +1581,7 @@ async fn main() {
         .route("/app/notes", get(get_app_notes))
         .route("/app/resources", get(get_app_resources))
         .route("/memos", post(post_memos))
+        .route("/memos/bulk-delete", post(bulk_delete_memos))
         .route("/memos/:id", put(put_memos).delete(delete_memo))
         .route("/memos/:id/edit", get(get_memo_edit_form))
         .route("/resources", post(post_resources))
@@ -2141,7 +2214,7 @@ mod tests {
     fn test_process_memo_content_ref_not_found() {
         let db = db::Database::new(":memory:").unwrap();
         let (content, resources) = process_memo_content(&db, "see [file](/resources/999)");
-        assert_eq!(content, "see [file](/resources/999)");
+        assert_eq!(content, "see");
         assert!(resources.is_empty());
     }
 }
