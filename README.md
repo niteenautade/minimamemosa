@@ -2,6 +2,10 @@
 
 A lightweight, self-hosted memo/notes app built for minimal resource usage (~5–10MB idle RAM, max 100MB).
 
+<p align="center">
+  <img src="screenshots/demo.gif" alt="MinimaMemosa demo" width="720">
+</p>
+
 ## Features
 
 - **Memos-style timeline** — Notes displayed in a date-grouped chronological feed
