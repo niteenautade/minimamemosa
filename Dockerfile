@@ -12,8 +12,8 @@ RUN mkdir -p /app/data && chown minimamemosa:minimamemosa /app/data
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
-COPY --from=builder /minimamemosa .
 WORKDIR /app
+COPY --from=builder /minimamemosa .
 EXPOSE 3000
 ENV DATABASE_PATH=/app/data/minimamemosa.db
 ENTRYPOINT ["/docker-entrypoint.sh"]
