@@ -53,6 +53,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - PORT=${PORT:-3000}
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-secret}
       - DATABASE_PATH=/app/data/minimamemosa.db
     volumes:
@@ -74,6 +75,7 @@ docker compose up --build
 
 | Env variable | Default | Description |
 |--------------|---------|-------------|
+| `PORT` | `3000` | HTTP listen port |
 | `DATABASE_PATH` | `data/minimamemosa.db` | SQLite database file path |
 | `SESSION_SECRET` | `minimamemosa-default-secret-change-me` | HMAC key for session signing |
 
