@@ -8,6 +8,7 @@ RUN cargo build --release && cp target/release/minimamemosa /minimamemosa
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates sqlite-libs
 RUN adduser -D -h /app minimamemosa
+RUN mkdir -p /app/data && chown minimamemosa:minimamemosa /app/data
 USER minimamemosa
 WORKDIR /app
 COPY --from=builder /minimamemosa .
