@@ -42,7 +42,29 @@ cargo run
 
 Open http://localhost:3000
 
-### Docker
+### Docker (published image)
+
+The app is published to `ghcr.io/niteenautade/minimamemosa`. Create a `docker-compose.yml`:
+
+```yaml
+services:
+  minimamemosa:
+    image: ghcr.io/niteenautade/minimamemosa:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-secret}
+      - DATABASE_PATH=/app/data/minimamemosa.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+```bash
+docker compose up -d
+```
+
+Or build from source:
 
 ```bash
 docker compose up --build
