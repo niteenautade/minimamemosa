@@ -14,6 +14,7 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 WORKDIR /app
 COPY --from=builder /minimamemosa .
+COPY static ./static
 EXPOSE 3000
 ENV DATABASE_PATH=/app/data/minimamemosa.db
 ENTRYPOINT ["/docker-entrypoint.sh"]
