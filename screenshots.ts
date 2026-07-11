@@ -155,6 +155,40 @@ async function main() {
   await page.screenshot({ path: 'screenshots/09-memos-scroll-dark.png' });
   console.log('✓ 09-memos-scroll-dark.png');
 
+  // === 10. LIGHT MODE TIMELINE ===
+  await page.evaluate(() => {
+    localStorage.setItem('theme', 'light');
+    document.documentElement.classList.remove('dark');
+    const h = [75,70,65,60,55,50,45,40,35,30];
+    const L = [0.95,0.90,0.82,0.72,0.62,0.55,0.48,0.42,0.35,0.28];
+    const C = [0.025,0.04,0.07,0.09,0.11,0.12,0.13,0.11,0.09,0.07];
+    const names = ['--a50','--a100','--a200','--a300','--a400','--a500','--a600','--a700','--a800','--a900'];
+    for (let i = 0; i < 10; i++)
+      document.documentElement.style.setProperty(names[i], 'oklch('+L[i]+' '+C[i]+' '+h[i]+')');
+  });
+  await page.goto('/app', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: 'screenshots/10-timeline-light.png' });
+  console.log('✓ 10-timeline-light.png');
+
+  // === 11. SETTINGS MODAL with Forest theme ===
+  await page.goto('/app', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
+  // Open settings
+  const settingsBtn = page.locator('button[onclick*="openSettings"]').first();
+  if (await settingsBtn.isVisible()) {
+    await settingsBtn.click();
+    await page.waitForTimeout(800);
+  }
+  // Click Forest theme
+  const forestTheme = page.locator('#settings-theme-list [data-theme="Forest"]').first();
+  if (await forestTheme.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await forestTheme.click();
+    await page.waitForTimeout(500);
+  }
+  await page.screenshot({ path: 'screenshots/11-settings-light.png' });
+  console.log('✓ 11-settings-light.png');
+
   // ── Add captions to each screenshot ──
   const captions: Record<string, string> = {
     '01-login-dark.png': '🔐 Dark login screen',
@@ -166,6 +200,8 @@ async function main() {
     '07-resources-dark.png': '📎 Resources panel',
     '08-share-note-dark.png': '🔗 Shared public note',
     '09-memos-scroll-dark.png': '📜 Timeline scrolled',
+    '10-timeline-light.png': '☀️ Light mode timeline',
+    '11-settings-light.png': '⚙️ Settings & Forest theme',
   };
   for (const [file, caption] of Object.entries(captions)) {
     const imgPath = `screenshots/${file}`;
@@ -198,7 +234,7 @@ img{display:block;max-width:100%;height:auto}
 
   // ── Generate GIF ──
   execSync(
-    'ffmpeg -y -framerate 1 -pattern_type glob -i \'screenshots/0*.png\' '
+    'ffmpeg -y -framerate 1 -pattern_type glob -i \'screenshots/[0-9][0-9]*.png\' '
     + '-vf "scale=800:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=256[p];[s1][p]paletteuse=dither=none" '
     + '-loop 0 screenshots/demo.gif',
     { stdio: 'inherit' }
