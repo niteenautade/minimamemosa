@@ -1145,8 +1145,8 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         // then swap the marker with &nbsp; in the markdown output.
         // This regex matches paragraphs containing only <br> tags (with optional whitespace/attributes).
         html = html.replace(/<p([^>]*)>(\s*<br[^>]*\/?>)+\s*<\/p>/gi, '<p$1>MMEMPTY</p>');
-        // Also catch truly empty or whitespace-only paragraphs (JS \s includes \u00a0/NBSP).
-        html = html.replace(/<p([^>]*)>\s*<\/p>/gi, '<p$1>MMEMPTY</p>');
+        // Also catch truly empty or whitespace-only paragraphs, including explicit &nbsp; strings.
+        html = html.replace(/<p([^>]*)>(?:\s|&nbsp;)*<\/p>/gi, '<p$1>MMEMPTY</p>');
         var ts = new TurndownService({ headingStyle: 'atx' });
         var md = ts.turndown(html);
         // Replace markers with &nbsp; — pulldown_cmark renders this as an invisible but

@@ -105,6 +105,54 @@ test.describe('Notes & UI Flows', () => {
     expect(pCount).toBeGreaterThan(3);
   });
 
+  test('should preserve multiple empty lines and editing', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    
+    await page.keyboard.type('Line 1');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Line 2');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Line 3');
+    
+    await expect(page.locator('#save-memo-btn')).toBeEnabled();
+    await page.click('#save-memo-btn');
+    await page.waitForTimeout(1000);
+
+    let memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    let html = await memoContent.innerHTML();
+    
+    let pCount = (html.match(/<p>/g) || []).length;
+    
+    // Hover to reveal action buttons
+    const memo = page.locator('#timeline [id^="memo-"]').first();
+    await memo.hover();
+    await memo.locator('button[onclick*="editMemo"]').click();
+
+    await page.waitForFunction(() => {
+      const ef = document.querySelector('[id^="memo-edit-form-"]');
+      return ef && getComputedStyle(ef).display !== 'none';
+    });
+    await page.waitForTimeout(1500);
+
+    const saveBtn = page.locator('[id^="save-memo-edit-btn-"]').first();
+    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+    await saveBtn.click();
+    await page.waitForTimeout(1000);
+
+    memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    html = await memoContent.innerHTML();
+    
+    let pCountAfterEdit = (html.match(/<p>/g) || []).length;
+    expect(pCountAfterEdit).toEqual(pCount);
+  });
+
   test('should preserve newlines when editing a note', async ({ page }) => {
     await waitForTiptap(page);
     await page.locator('.ProseMirror').first().focus();

@@ -2227,4 +2227,37 @@ mod tests {
         assert_eq!(content, "see");
         assert!(resources.is_empty());
     }
+
+    #[test]
+    fn test_render_markdown_nbsp_blank_lines() {
+        // Single blank line between paragraphs (one &nbsp; paragraph)
+        let md = "Line 1\n\n&nbsp;\n\nLine 2";
+        let html = render_markdown(md);
+        assert!(html.contains("Line 1"), "Should contain Line 1");
+        assert!(html.contains("Line 2"), "Should contain Line 2");
+        // Should have 3 <p> tags: Line 1, &nbsp;, Line 2
+        let p_count = html.matches("<p>").count();
+        assert_eq!(p_count, 3, "Expected 3 paragraphs, got {}: {}", p_count, html);
+    }
+
+    #[test]
+    fn test_render_markdown_multiple_nbsp_blank_lines() {
+        // Two blank lines between paragraphs
+        let md = "Line 1\n\n&nbsp;\n\n&nbsp;\n\nLine 2";
+        let html = render_markdown(md);
+        let p_count = html.matches("<p>").count();
+        assert_eq!(p_count, 4, "Expected 4 paragraphs, got {}: {}", p_count, html);
+    }
+
+    #[test]
+    fn test_render_markdown_complex_blank_lines() {
+        // Line 1, one blank, Line 2, two blanks, Line 3
+        let md = "Line 1\n\n&nbsp;\n\nLine 2\n\n&nbsp;\n\n&nbsp;\n\nLine 3";
+        let html = render_markdown(md);
+        let p_count = html.matches("<p>").count();
+        assert_eq!(p_count, 6, "Expected 6 paragraphs (3 text + 3 nbsp), got {}: {}", p_count, html);
+        assert!(html.contains("Line 1"));
+        assert!(html.contains("Line 2"));
+        assert!(html.contains("Line 3"));
+    }
 }
