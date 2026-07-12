@@ -46,7 +46,16 @@ struct MemoForm {
 }
 
 fn render_markdown(text: &str) -> String {
-    let parser = pulldown_cmark::Parser::new(text);
+    let mut options = pulldown_cmark::Options::empty();
+    options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
+    options.insert(pulldown_cmark::Options::ENABLE_TABLES);
+    options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
+
+    let parser = pulldown_cmark::Parser::new_ext(text, options).map(|event| match event {
+        pulldown_cmark::Event::SoftBreak => pulldown_cmark::Event::HardBreak,
+        _ => event,
+    });
+    
     let mut html = String::new();
     pulldown_cmark::html::push_html(&mut html, parser);
     html

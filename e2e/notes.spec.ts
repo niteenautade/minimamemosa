@@ -42,6 +42,40 @@ test.describe('Notes & UI Flows', () => {
     await expect(page.locator('#timeline').getByText('note has')).toBeVisible();
   });
 
+  test('should preserve line breaks with Shift+Enter', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    await page.keyboard.type('Line 1');
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('Line 2');
+    await expect(page.locator('#save-memo-btn')).toBeEnabled();
+    await page.click('#save-memo-btn');
+    await page.waitForTimeout(1000);
+
+    const memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    const html = await memoContent.innerHTML();
+    expect(html).toContain('Line 1<br>');
+  });
+
+  test('should preserve line breaks with Enter', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    await page.keyboard.type('Paragraph 1');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Paragraph 2');
+    await expect(page.locator('#save-memo-btn')).toBeEnabled();
+    await page.click('#save-memo-btn');
+    await page.waitForTimeout(1000);
+
+    const memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    const html = await memoContent.innerHTML();
+    // Enter should create separate paragraph blocks or a line break
+    expect(html).toContain('<p>Paragraph 1</p>');
+    expect(html).toContain('<p>Paragraph 2</p>');
+  });
+
   test('should edit an existing note', async ({ page }) => {
     await createNote(page, 'Original content for edit test');
 
