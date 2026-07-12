@@ -1148,6 +1148,12 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         // Also catch truly empty or whitespace-only paragraphs, including explicit &nbsp; strings.
         html = html.replace(/<p([^>]*)>(?:\s|&nbsp;)*<\/p>/gi, '<p$1>MMEMPTY</p>');
         var ts = new TurndownService({ headingStyle: 'atx' });
+        ts.addRule('br', {
+            filter: 'br',
+            replacement: function () {
+                return '<br>';
+            }
+        });
         var md = ts.turndown(html);
         // Replace markers with &nbsp; — pulldown_cmark renders this as an invisible but
         // height-occupying paragraph, preserving the visual blank line.

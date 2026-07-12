@@ -2260,4 +2260,11 @@ mod tests {
         assert!(html.contains("Line 2"));
         assert!(html.contains("Line 3"));
     }
+
+    #[test]
+    fn test_render_markdown_hard_breaks() {
+        let md = "Line 1<br><br><br>Line 2";
+        let html = render_markdown(md);
+        println!("HTML for raw br: {}", html);
+    }
 }

@@ -153,6 +153,52 @@ test.describe('Notes & UI Flows', () => {
     expect(pCountAfterEdit).toEqual(pCount);
   });
 
+  test('should preserve soft breaks with Shift+Enter', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    
+    await page.keyboard.type('Line 1');
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('Line 2');
+    
+    await expect(page.locator('#save-memo-btn')).toBeEnabled();
+    
+    await page.click('#save-memo-btn');
+    await page.waitForTimeout(1000);
+
+    let memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    let html = await memoContent.innerHTML();
+    
+    // It should be within a single paragraph (or just normal markdown parsing), but must contain <br>
+    expect(html).toContain('Line 1<br');
+    expect(html).toContain('<br>Line 2');
+    
+    // Edit the note to verify it persists
+    const memo = page.locator('#timeline [id^="memo-"]').first();
+    await memo.hover();
+    await memo.locator('button[onclick*="editMemo"]').click();
+
+    await page.waitForFunction(() => {
+      const ef = document.querySelector('[id^="memo-edit-form-"]');
+      return ef && getComputedStyle(ef).display !== 'none';
+    });
+    await page.waitForTimeout(1500);
+
+    const saveBtn = page.locator('[id^="save-memo-edit-btn-"]').first();
+    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+    await saveBtn.click();
+    await page.waitForTimeout(1000);
+
+    memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    html = await memoContent.innerHTML();
+    
+    expect(html).toContain('Line 1<br');
+    expect(html).toContain('<br>Line 2');
+  });
+
   test('should preserve newlines when editing a note', async ({ page }) => {
     await waitForTiptap(page);
     await page.locator('.ProseMirror').first().focus();
