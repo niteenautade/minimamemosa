@@ -180,9 +180,9 @@ const BASE_TEMPLATE: &str = r#"<!DOCTYPE html>
         .memo-content h1 { font-size: 1.375rem; font-weight: 600; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
         .memo-content h2 { font-size: 1.1875rem; font-weight: 600; margin-bottom: 0.5rem; }
         .memo-content h3 { font-size: 1.0625rem; font-weight: 600; margin-bottom: 0.25rem; }
-        .memo-content p { margin-bottom: 0; line-height: 1.65; }
+        .memo-content p { margin-bottom: 0.5rem; line-height: 1.65; }
         .memo-content p:last-child { margin-bottom: 0; }
-        .tiptap-editor p { margin-bottom: 0; line-height: 1.65; }
+        .tiptap-editor p { margin-bottom: 0.5rem; line-height: 1.65; }
         .tiptap-editor p:last-child { margin-bottom: 0; }
         .tiptap-editor h1 { font-size: 1.375em; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.25rem; }
         .tiptap-editor h2 { font-size: 1.1875em; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
@@ -989,30 +989,57 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
 
 <script>
     /* ── Editor Fallback (works if Tiptap CDN fails) ── */
-    function getEditorText() {
-        var el = document.getElementById('memo-editor');
-        if (window.tiptapEditor) {
-            return window.tiptapEditor.getText();
+    function getEditorText(el) {
+        if (!el) el = document.getElementById('memo-editor');
+        if (!el) return '';
+        var form = el.closest('form');
+        var isEdit = form && form.id && form.id.startsWith('memo-edit-form-');
+        var ed;
+        if (isEdit) {
+            var match = form.id.match(/memo-edit-form-(\d+)/);
+            var id = match ? match[1] : null;
+            ed = id && window.tiptapEditEditors ? window.tiptapEditEditors[id] : null;
+        } else {
+            ed = window.tiptapEditor;
         }
-        return el ? (el.innerText || el.textContent || '') : '';
+        if (ed) {
+            return ed.getText();
+        }
+        return el.innerText || el.textContent || '';
     }
     function onFallbackInput(el) {
-        var text = getEditorText();
-        document.getElementById('memo-editor-input').value = text;
+        var text = getEditorText(el);
+        var form = el.closest('form');
+        if (form) {
+            var input = form.querySelector('input[name="content"]');
+            if (input) input.value = text;
+        }
         var isEmpty = !text.trim();
         if (isEmpty) {
             el.setAttribute('data-empty', 'true');
         } else {
             el.removeAttribute('data-empty');
         }
-        updateSaveButtonState();
+        if (form && form.id === 'memo-form') {
+            updateSaveButtonState();
+        } else if (form) {
+            var match = form.id.match(/memo-edit-form-(\d+)/);
+            var id = match ? match[1] : null;
+            var btn = document.getElementById('save-memo-edit-btn-' + id);
+            if (btn) btn.disabled = isEmpty;
+        }
     }
     function onFallbackKeydown(e, el) {
+        var form = el.closest('form');
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             e.preventDefault();
-            document.getElementById('memo-editor-input').value = getEditorText();
-            var btn = document.getElementById('memo-form').querySelector('button[type="submit"]');
-            if (btn) btn.click();
+            var text = getEditorText(el);
+            if (form) {
+                var input = form.querySelector('input[name="content"]');
+                if (input) input.value = text;
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.click();
+            }
             return;
         }
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1026,8 +1053,19 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             range.setStartAfter(br);
             range.collapse(true);
             sel.removeAllRanges(); sel.addRange(range);
-            document.getElementById('memo-editor-input').value = getEditorText();
-            updateSaveButtonState();
+            var text = getEditorText(el);
+            if (form) {
+                var input = form.querySelector('input[name="content"]');
+                if (input) input.value = text;
+            }
+            if (form && form.id === 'memo-form') {
+                updateSaveButtonState();
+            } else if (form) {
+                var match = form.id.match(/memo-edit-form-(\d+)/);
+                var id = match ? match[1] : null;
+                var btn = document.getElementById('save-memo-edit-btn-' + id);
+                if (btn) btn.disabled = !text.trim();
+            }
             return;
         }
         var _sm = document.getElementById('slash-menu');
@@ -1099,22 +1137,50 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         s.removeAllRanges(); s.addRange(r);
     }
 
+    function turndownHtml(html) {
+        if (!html) return '';
+        // Tiptap represents empty paragraphs as <p><br></p> or <p><br class="ProseMirror-trailingBreak"></p>.
+        // TurndownService treats these as "blank" and silently discards them.
+        // Fix: replace empty paragraphs with a unique text marker BEFORE TurndownService,
+        // then swap the marker with &nbsp; in the markdown output.
+        // This regex matches paragraphs containing only <br> tags (with optional whitespace/attributes).
+        html = html.replace(/<p([^>]*)>(\s*<br[^>]*\/?>)+\s*<\/p>/gi, '<p$1>MMEMPTY</p>');
+        // Also catch truly empty or whitespace-only paragraphs (JS \s includes \u00a0/NBSP).
+        html = html.replace(/<p([^>]*)>\s*<\/p>/gi, '<p$1>MMEMPTY</p>');
+        var ts = new TurndownService({ headingStyle: 'atx' });
+        var md = ts.turndown(html);
+        // Replace markers with &nbsp; — pulldown_cmark renders this as an invisible but
+        // height-occupying paragraph, preserving the visual blank line.
+        md = md.replace(/MMEMPTY/g, '&nbsp;');
+        return md;
+    }
+
     /* ── Tiptap Editor Globals ── */
-    function getTiptapMarkdown() {
-        var ed = window.tiptapEditor;
+    function getTiptapMarkdown(el) {
+        if (!el) el = document.getElementById('memo-editor');
+        if (!el) return '';
+        var form = el.closest('form');
+        var isEdit = form && form.id && form.id.startsWith('memo-edit-form-');
+        var ed;
+        if (isEdit) {
+            var match = form.id.match(/memo-edit-form-(\d+)/);
+            var id = match ? match[1] : null;
+            ed = id && window.tiptapEditEditors ? window.tiptapEditEditors[id] : null;
+        } else {
+            ed = window.tiptapEditor;
+        }
         if (ed) {
             if (ed.isEmpty) return '';
             var html = ed.getHTML();
             if (html && html !== '<p></p>') {
                 if (html.indexOf('?w=') >= 0) return html;
                 try {
-                    var ts = new TurndownService({ headingStyle: 'atx' });
-                    return ts.turndown(html);
+                    return turndownHtml(html);
                 } catch(e) {}
             }
             return '';
         }
-        return getEditorText();
+        return getEditorText(el);
     }
     function updateSaveButtonState() {
         var btn = document.getElementById('save-memo-btn');
@@ -1648,6 +1714,10 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         htmx.trigger(editEl, 'load');
     }
     function cancelEdit(id) {
+        if (window.tiptapEditEditors && window.tiptapEditEditors[id]) {
+            try { window.tiptapEditEditors[id].destroy(); } catch(e) {}
+            delete window.tiptapEditEditors[id];
+        }
         var container = document.getElementById('memo-' + id);
         if (!container) return;
         container.querySelector('.memo-display').classList.remove('hidden');
@@ -1899,7 +1969,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
  extensions: [
                       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                       Placeholder.configure({ placeholder: "What's on your mind..." }),
-                      Markdown,
+                      Markdown.configure({ breaks: true }),
                       CodeBlockLowlight.configure({ lowlight: lowlight }),
                       ImageExt,
                       LinkExt.configure({ openOnClick: false }),
@@ -2028,8 +2098,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
                                 document.getElementById('memo-editor-input').value = html;
                                 isEmpty = false;
                             } else {
-                                var ts = new TurndownService({ headingStyle: 'atx' });
-                                var md2 = ts.turndown(html);
+                                var md2 = turndownHtml(html);
                                 document.getElementById('memo-editor-input').value = md2;
                                 isEmpty = md2.trim() === '';
                             }
@@ -2589,11 +2658,11 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
       hx-put="/memos/{{ id }}"
       hx-target="#memo-{{ id }}"
       hx-swap="outerHTML"
-      hx-on::after-request="if(event.detail.successful){htmx.trigger('body','memoUpdated')}"
+      hx-on::after-request="if(event.detail.successful){ if(window.tiptapEditEditors && window.tiptapEditEditors[{{ id }}]) { try { window.tiptapEditEditors[{{ id }}].destroy(); } catch(e){} delete window.tiptapEditEditors[{{ id }}]; } htmx.trigger('body','memoUpdated') }"
       ondragover="event.preventDefault(); this.classList.add('border-accent-500')"
       ondragleave="event.preventDefault(); this.classList.remove('border-accent-500')"
       ondrop="event.preventDefault(); this.classList.remove('border-accent-500'); handleDrop(event)"
-      onsubmit="document.getElementById('memo-edit-input-{{ id }}').value = getTiptapMarkdown();">
+      onsubmit="document.getElementById('memo-edit-input-{{ id }}').value = getTiptapMarkdown(document.getElementById('memo-edit-memo-editor-{{ id }}'));">
     <div class="px-3 lg:px-4 pt-3 pb-1 relative">
         <div id="memo-edit-memo-editor-{{ id }}"
              class="w-full bg-transparent text-foreground text-base leading-snug min-h-[6rem] tiptap-editor max-w-none focus:outline-none"
@@ -2639,12 +2708,13 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             mountEl.onkeydown = null;
             var existingMd = mountEl.getAttribute('data-content') || '';
             mountEl.removeAttribute('data-content');
-            window.tiptapEditor = new Editor({
+            if (!window.tiptapEditEditors) window.tiptapEditEditors = {};
+            var editEditor = new Editor({
                 element: mountEl,
                 extensions: [
                       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                       Placeholder.configure({ placeholder: "What's on your mind..." }),
-                      Markdown,
+                      Markdown.configure({ breaks: true }),
                       CodeBlockLowlight.configure({ lowlight: lowlight }),
                       ImageExt,
                       LinkExt.configure({ openOnClick: false }),
@@ -2761,7 +2831,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     }
                 },
                     onUpdate: function() {
-                        var ed = window.tiptapEditor;
+                        var ed = editEditor;
                         if (!ed) return;
                         var isEmpty = ed.isEmpty;
                         if (isEmpty) {
@@ -2773,8 +2843,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                                     document.getElementById('memo-edit-input-{{ id }}').value = html;
                                     isEmpty = false;
                                 } else {
-                                    var ts = new TurndownService({ headingStyle: 'atx' });
-                                    var md2 = ts.turndown(html);
+                                    var md2 = turndownHtml(html);
                                     document.getElementById('memo-edit-input-{{ id }}').value = md2;
                                     isEmpty = md2.trim() === '';
                                 }
@@ -2784,8 +2853,9 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                         if (btn) btn.disabled = isEmpty;
                     },
             });
+            window.tiptapEditEditors[{{ id }}] = editEditor;
             if (existingMd && existingMd.trim()) {
-                window.tiptapEditor.commands.setContent(existingMd, true);
+                editEditor.commands.setContent(existingMd, true);
             }
         } else {
             mountEl.classList.remove('animate-pulse', 'bg-muted/30', 'rounded', 'shimmer-bg');

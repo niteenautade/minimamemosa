@@ -76,6 +76,73 @@ test.describe('Notes & UI Flows', () => {
     expect(html).toContain('<p>Paragraph 2</p>');
   });
 
+  test('should preserve empty lines between paragraphs', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    // Type: Line 1 [Enter] [Enter] Line 2 [Enter] [Enter] [Enter] Line 3
+    await page.keyboard.type('Line 1');
+    await page.keyboard.press('Enter');  // new paragraph (empty)
+    await page.keyboard.press('Enter');  // another new paragraph
+    await page.keyboard.type('Line 2');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Line 3');
+    await expect(page.locator('#save-memo-btn')).toBeEnabled();
+    await page.click('#save-memo-btn');
+    await page.waitForTimeout(1000);
+
+    const memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    const html = await memoContent.innerHTML();
+    // All three lines must be present as separate paragraphs
+    expect(html).toContain('<p>Line 1</p>');
+    expect(html).toContain('<p>Line 2</p>');
+    expect(html).toContain('<p>Line 3</p>');
+    // Empty lines should be preserved as &nbsp; paragraphs (rendered as \u00a0 by pulldown_cmark)
+    // Count the total number of <p> tags — should be more than 3 (the 3 text paragraphs + blank line paragraphs)
+    const pCount = (html.match(/<p>/g) || []).length;
+    expect(pCount).toBeGreaterThan(3);
+  });
+
+  test('should preserve newlines when editing a note', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    await page.keyboard.type('Line 1');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Line 2');
+    await expect(page.locator('#save-memo-btn')).toBeEnabled();
+    await page.click('#save-memo-btn');
+    await page.waitForTimeout(1000);
+
+    // Hover to reveal action buttons
+    const memo = page.locator('#timeline [id^="memo-"]').first();
+    await memo.hover();
+
+    // Click edit
+    await memo.locator('button[onclick*="editMemo"]').click();
+
+    // Wait for edit form to load
+    await page.waitForFunction(() => {
+      const ef = document.querySelector('[id^="memo-edit-form-"]');
+      return ef && getComputedStyle(ef).display !== 'none';
+    });
+
+    await page.waitForTimeout(1500);
+
+    // Click Save on edit form without modifying
+    const saveBtn = page.locator('[id^="save-memo-edit-btn-"]').first();
+    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+    await saveBtn.click();
+    await page.waitForTimeout(1000);
+
+    const memoContent = page.locator('#timeline [id^="memo-"] .memo-content').first();
+    await expect(memoContent).toBeVisible();
+    const html = await memoContent.innerHTML();
+    expect(html).toContain('<p>Line 1</p>');
+    expect(html).toContain('<p>Line 2</p>');
+  });
+
   test('should edit an existing note', async ({ page }) => {
     await createNote(page, 'Original content for edit test');
 
