@@ -828,11 +828,11 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                                 </button>
 <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[200px] overflow-y-auto">
-                                                    <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
+                                                    <div id="emoji-grid" class="emoji-grid grid grid-cols-7 gap-0.5 text-lg"></div>
                                                 </div>
                                             </div>
                                           <div class="relative">
-                                                <button type="button" onclick="event.stopPropagation(); togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
+                                                <button type="button" onclick="event.stopPropagation(); togglePlusMenu(this)" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
                                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                               </button>
                                                 <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px] max-w-[calc(100vw-2rem)]">
@@ -1210,7 +1210,7 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
         updateSaveButtonState();
     }
     function insertContenteditable(text) {
-        var ed = window.tiptapEditor;
+        var ed = window.activeTiptapEditor || window.tiptapEditor;
         if (ed) { ed.chain().focus().insertContent(text).run(); }
         else {
             var el = document.getElementById('memo-editor');
@@ -1244,13 +1244,13 @@ const TIMELINE_TEMPLATE: &str = r##"{% extends "base" %}
             picker.classList.add('hidden');
         }
     }
-    function insertEmoji(emoji) { insertContenteditable(emoji); document.getElementById('emoji-picker').classList.add('hidden'); }
-    function togglePlusMenu() {
-        var menu = document.getElementById('plus-menu');
-        if (menu.classList.contains('hidden')) {
+    function insertEmoji(emoji) { insertContenteditable(emoji); closeAllDropdowns(); }
+    function togglePlusMenu(btn) {
+        var menu = (btn && btn.nextElementSibling) ? btn.nextElementSibling : document.getElementById('plus-menu');
+        if (menu && menu.classList.contains('hidden')) {
             closeAllDropdowns();
             menu.classList.remove('hidden');
-        } else { menu.classList.add('hidden'); }
+        } else if (menu) { menu.classList.add('hidden'); }
     }
     function uploadImage() { document.getElementById('image-upload-input').click(); closeAllDropdowns(); }
     function uploadFile() { document.getElementById('file-upload-input').click(); closeAllDropdowns(); }
@@ -1305,7 +1305,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     }
     function insertMemoLink(id, title) { insertContenteditable('['+title+'](/memos/'+id+')'); document.getElementById('link-memo-dropdown').classList.add('hidden'); }
     function closeAllDropdowns() {
-        ['emoji-picker','plus-menu','link-memo-dropdown'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+        document.querySelectorAll('[id^="emoji-picker"], [id^="plus-menu"], [id^="link-memo-dropdown"]').forEach(function(el) { el.classList.add('hidden'); });
         document.querySelectorAll('.vis-dropdown-menu').forEach(function(el) { el.classList.add('hidden'); });
     }
     function escapeHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
@@ -1325,7 +1325,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
         { label: 'Code', command: 'toggleCode', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>' },
     ];
     function applySlashCommand(cmd) {
-        var ed = window.tiptapEditor;
+        var ed = window.activeTiptapEditor || window.tiptapEditor;
         if (ed) {
             if (cmd.command) {
                 var chain = ed.chain().focus();
@@ -1573,7 +1573,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
     /* ── Memo CRUD ── */
     var editorAttachments = [];
     function renderEditorAttachments() {}
-    function uploadFilesForEditor(files) {
+    function uploadFilesForEditor(files, targetEditor) {
         var fd = new FormData();
         for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
         return fetch('/resources', { method: 'POST', body: fd })
@@ -1585,7 +1585,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
                     }
                 }
                 if (data.resources && data.resources.length) {
-                    var ed = window.tiptapEditor;
+                    var ed = targetEditor || window.activeTiptapEditor || window.tiptapEditor;
                     for (var j = 0; j < data.resources.length; j++) {
                         var md = data.resources[j].markdown;
                         if (ed) {
@@ -1972,6 +1972,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
             });
             window.tiptapEditor = new Editor({
                 element: mountEl,
+                onFocus: function() { window.activeTiptapEditor = window.tiptapEditor; },
  extensions: [
                       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                       Placeholder.configure({ placeholder: "What's on your mind..." }),
@@ -2717,6 +2718,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
             if (!window.tiptapEditEditors) window.tiptapEditEditors = {};
             var editEditor = new Editor({
                 element: mountEl,
+                onFocus: function() { window.activeTiptapEditor = editEditor; },
                 extensions: [
                       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                       Placeholder.configure({ placeholder: "What's on your mind..." }),
@@ -2876,15 +2878,15 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
     <div class="flex items-center justify-between px-3 lg:px-4 py-2 border-t border-border">
         <div class="flex items-center gap-1">
             <div class="relative">
-                <button type="button" onclick="toggleEmojiPicker()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
+                <button type="button" onclick="toggleEmojiPicker(this)" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="Insert Emoji">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </button>
                 <div id="emoji-picker" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl p-2 z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[200px] overflow-y-auto">
-                    <div id="emoji-grid" class="grid grid-cols-7 gap-0.5 text-lg"></div>
+                    <div id="emoji-grid" class="emoji-grid grid grid-cols-7 gap-0.5 text-lg"></div>
                 </div>
             </div>
             <div class="relative">
-                <button type="button" onclick="togglePlusMenu()" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
+                <button type="button" onclick="event.stopPropagation(); togglePlusMenu(this)" class="p-1.5 rounded-md text-muted-fg hover:text-foreground hover:bg-muted transition-colors" title="More">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 </button>
                 <div id="plus-menu" class="hidden absolute top-full left-0 mt-1 bg-card border border-border rounded-xl shadow-xl py-1 z-50 min-w-[180px] max-w-[calc(100vw-2rem)]">
