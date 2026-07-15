@@ -29,6 +29,7 @@ impl Database {
             CREATE TABLE IF NOT EXISTS memo_tags (
                 memo_id INTEGER NOT NULL,
                 tag TEXT NOT NULL COLLATE NOCASE,
+                PRIMARY KEY (memo_id, tag),
                 FOREIGN KEY (memo_id) REFERENCES memos(id) ON DELETE CASCADE
             );
             CREATE TABLE IF NOT EXISTS resources (
@@ -51,6 +52,21 @@ impl Database {
         conn.execute_batch("ALTER TABLE memos ADD COLUMN title TEXT NOT NULL DEFAULT ''").ok();
         conn.execute_batch("ALTER TABLE memos ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'").ok();
         conn.execute_batch("ALTER TABLE memos ADD COLUMN password_hash TEXT").ok();
+
+        // Migration to fix any legacy databases that might have had UNIQUE(tag)
+        // and to enforce PRIMARY KEY (memo_id, tag) going forward.
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS memo_tags_new (
+                memo_id INTEGER NOT NULL,
+                tag TEXT NOT NULL COLLATE NOCASE,
+                PRIMARY KEY (memo_id, tag),
+                FOREIGN KEY (memo_id) REFERENCES memos(id) ON DELETE CASCADE
+            );
+            INSERT OR IGNORE INTO memo_tags_new (memo_id, tag) SELECT memo_id, tag FROM memo_tags;
+            DROP TABLE memo_tags;
+            ALTER TABLE memo_tags_new RENAME TO memo_tags;"
+        ).ok();
+
         Ok(Database { conn: Mutex::new(conn) })
     }
 
@@ -968,6 +984,24 @@ mod tests {
         let db = setup_db();
         assert!(db.check_and_record_rate_limit("ip", "test", 1, -1).unwrap());
         assert!(db.check_and_record_rate_limit("ip", "test", 1, -1).unwrap());
+    }
+    #[test]
+    fn test_same_tag_multiple_memos() {
+        let db = setup_db();
+        let user_id = create_user(&db);
+        let id1 = db.create_memo(user_id, "T1", "C1", "private", None).unwrap();
+        db.set_memo_tags(id1, &["tag1".to_string()]).unwrap();
+        let id2 = db.create_memo(user_id, "T2", "C2", "private", None).unwrap();
+        db.set_memo_tags(id2, &["tag1".to_string()]).unwrap();
+        
+        let tags1 = db.get_memo_tags(id1).unwrap();
+        assert_eq!(tags1, vec!["tag1".to_string()]);
+        
+        let tags2 = db.get_memo_tags(id2).unwrap();
+        assert_eq!(tags2, vec!["tag1".to_string()]);
+        
+        let memos = db.get_memos_by_tag(user_id, "tag1").unwrap();
+        assert_eq!(memos.len(), 2);
     }
 }
 
