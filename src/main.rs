@@ -210,7 +210,12 @@ fn extract_tags(content: &str) -> Vec<String> {
     let mut tags = Vec::new();
     let mut in_word = false;
     let mut tag_start = 0;
-    let chars: Vec<char> = content.chars().collect();
+    
+    // Strip HTML to prevent tags like <p> from interfering with hashtag boundaries.
+    // Also handle HTML entities that might act as whitespace.
+    let clean_content = strip_html(content).replace("&nbsp;", " ");
+    
+    let chars: Vec<char> = clean_content.chars().collect();
     for (i, &c) in chars.iter().enumerate() {
         if c == '#' && !in_word && (i == 0 || chars[i-1].is_whitespace() || chars[i-1] == '(') {
             in_word = true;
@@ -1842,6 +1847,15 @@ mod tests {
     fn test_extract_tags_simple() {
         let tags = extract_tags("hello #world this is #rust");
         assert_eq!(tags, vec!["rust".to_string(), "world".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_first_in_html() {
+        let tags = extract_tags("<p>#abc #xyz</p>");
+        assert_eq!(tags, vec!["abc".to_string(), "xyz".to_string()]);
+        
+        let tags2 = extract_tags("<div>&nbsp;#abc #xyz</div>");
+        assert_eq!(tags2, vec!["abc".to_string(), "xyz".to_string()]);
     }
 
     #[test]
