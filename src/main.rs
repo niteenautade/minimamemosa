@@ -180,12 +180,23 @@ fn strip_html(s: &str) -> String {
     let mut tag_buf = String::new();
     for c in s.chars() {
         match c {
-            '<' => { in_tag = true; tag_buf.clear(); }
+            '<' => {
+                if in_tag {
+                    out.push('<');
+                    out.push_str(&tag_buf);
+                }
+                in_tag = true; 
+                tag_buf.clear(); 
+            }
             '>' => {
-                in_tag = false;
-                let t = tag_buf.trim();
-                if t == "p" || t == "/p" || t == "br" || t == "/div" || t.starts_with("br ") || t.starts_with("/h") || t.starts_with("h") {
-                    out.push('\n');
+                if in_tag {
+                    in_tag = false;
+                    let t = tag_buf.trim();
+                    if t == "p" || t == "/p" || t == "br" || t == "br/" || t == "/div" || t.starts_with("br ") || t.starts_with("/h") || t.starts_with("h") {
+                        out.push('\n');
+                    }
+                } else {
+                    out.push('>');
                 }
             }
             _ => {
@@ -193,6 +204,10 @@ fn strip_html(s: &str) -> String {
                 else { out.push(c); }
             }
         }
+    }
+    if in_tag {
+        out.push('<');
+        out.push_str(&tag_buf);
     }
     out
 }
@@ -1764,7 +1779,7 @@ mod tests {
     #[test]
     fn test_strip_html_self_closing() {
         let result = strip_html("<p>a</p><br/><p>b</p>");
-        assert_eq!(result, "\na\n\nb\n");
+        assert_eq!(result, "\na\n\n\nb\n");
     }
 
     #[test]
@@ -1856,6 +1871,15 @@ mod tests {
         
         let tags2 = extract_tags("<div>&nbsp;#abc #xyz</div>");
         assert_eq!(tags2, vec!["abc".to_string(), "xyz".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_tags_nested_unclosed_html() {
+        let tags = extract_tags("Detect if any error using\n${{<%[%'\"}}%\\\n#portswigger #ssti");
+        assert_eq!(tags, vec!["portswigger".to_string(), "ssti".to_string()]);
+        
+        let tags2 = extract_tags("<p>Detect<br/>${{<%[%'\"}}%\\<br/>#portswigger #ssti</p>");
+        assert_eq!(tags2, vec!["portswigger".to_string(), "ssti".to_string()]);
     }
 
     #[test]
