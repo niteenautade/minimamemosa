@@ -3,6 +3,8 @@
 A lightweight, self-hosted memo/notes app built for minimal resource usage (~5–10MB idle RAM, max 100MB).
 
 > **▶ Try the live demo: [https://minimamemosa.onrender.com](https://minimamemosa.onrender.com)**
+>
+> ⚠️ The demo app is **not** meant for daily use — its data gets wiped on every deployment. For personal use, self-host the app with a Docker volume (see [Quick Start](#quick-start)) so your data persists.
 
 <p align="center">
   <img src="screenshots/demo.gif" alt="MinimaMemosa demo" width="720">
