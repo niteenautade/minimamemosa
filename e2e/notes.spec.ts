@@ -60,6 +60,28 @@ test.describe('Notes & UI Flows', () => {
     await expect(slashMenu.locator('button').first()).toBeVisible();
   });
 
+  test('should parse markdown correctly on paste', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    
+    // Dispatch a paste event with markdown text
+    await page.evaluate(() => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', '### Subdomain Enumeration\\n```bash\\nsubfinder -d example.com\\n```');
+      const event = new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true
+      });
+      document.querySelector('.ProseMirror')?.dispatchEvent(event);
+    });
+
+    // Wait and verify HTML transformation
+    const editor = page.locator('.ProseMirror').first();
+    await expect(editor.locator('h3')).toHaveText('Subdomain Enumeration');
+    await expect(editor.locator('pre code')).toHaveText('subfinder -d example.com');
+  });
+
   test('should preserve line breaks with Shift+Enter', async ({ page }) => {
     await waitForTiptap(page);
     await page.locator('.ProseMirror').first().focus();

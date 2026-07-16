@@ -232,7 +232,7 @@ fn extract_tags(content: &str) -> Vec<String> {
     
     let chars: Vec<char> = clean_content.chars().collect();
     for (i, &c) in chars.iter().enumerate() {
-        if c == '#' && !in_word && (i == 0 || chars[i-1].is_whitespace() || chars[i-1] == '(') {
+        if c == '#' && !in_word && (i == 0 || !chars[i-1].is_alphanumeric()) {
             in_word = true;
             tag_start = i + 1;
         } else if in_word {
@@ -240,6 +240,7 @@ fn extract_tags(content: &str) -> Vec<String> {
                 continue;
             } else {
                 let tag_name: String = chars[tag_start..i].iter().collect();
+                let tag_name = tag_name.trim_end_matches('_');
                 if !tag_name.is_empty() {
                     tags.push(tag_name.to_lowercase());
                 }
@@ -248,7 +249,8 @@ fn extract_tags(content: &str) -> Vec<String> {
         }
     }
     if in_word {
-        let tag_name: String = chars[tag_start..].iter().collect();
+        let tag_name: String = chars[tag_start..chars.len()].iter().collect();
+        let tag_name = tag_name.trim_end_matches('_');
         if !tag_name.is_empty() {
             tags.push(tag_name.to_lowercase());
         }
@@ -1940,6 +1942,14 @@ mod tests {
     fn test_extract_tags_sorted() {
         let tags = extract_tags("#zebra #apple #banana");
         assert_eq!(tags, vec!["apple", "banana", "zebra"]);
+    }
+
+    #[test]
+    fn test_extract_tags_escaped_and_trailing_underscore() {
+        // Turndown will escape a hashtag at the start of a block like \n\#pentest
+        // We should extract pentest correctly, and strip trailing underscores like methodology_
+        let tags = extract_tags("\\#pentest #bugbounty #methodology_");
+        assert_eq!(tags, vec!["bugbounty", "methodology", "pentest"]);
     }
 
     // ── relative_time Tests ──

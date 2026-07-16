@@ -1976,7 +1976,7 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
  extensions: [
                       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                       Placeholder.configure({ placeholder: "What's on your mind..." }),
-                      Markdown.configure({ breaks: true }),
+                      Markdown.configure({ breaks: true, transformPastedText: true }),
                       CodeBlockLowlight.configure({ lowlight: lowlight }),
                       ImageExt,
                       LinkExt.configure({ openOnClick: false }),
@@ -2735,7 +2735,7 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                 extensions: [
                       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false }),
                       Placeholder.configure({ placeholder: "What's on your mind..." }),
-                      Markdown.configure({ breaks: true }),
+                      Markdown.configure({ breaks: true, transformPastedText: true }),
                       CodeBlockLowlight.configure({ lowlight: lowlight }),
                       ImageExt,
                       LinkExt.configure({ openOnClick: false }),

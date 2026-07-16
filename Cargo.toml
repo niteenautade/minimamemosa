@@ -29,3 +29,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Compile dependencies fast without heavy optimizations to speed up Docker builds
+[profile.release.package."*"]
+opt-level = "s"
+codegen-units = 16
