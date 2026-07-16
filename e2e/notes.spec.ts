@@ -42,6 +42,24 @@ test.describe('Notes & UI Flows', () => {
     await expect(page.locator('#timeline').getByText('note has')).toBeVisible();
   });
 
+  test('should open slash menu when typing / in the editor', async ({ page }) => {
+    await waitForTiptap(page);
+    await page.locator('.ProseMirror').first().focus();
+    
+    // Type slash to trigger the slash menu
+    await page.keyboard.type('/');
+    
+    // Wait for the slash menu to become visible
+    const slashMenu = page.locator('#slash-menu');
+    await expect(slashMenu).toBeVisible();
+    
+    // Type 'h' to verify filtering works while menu is open
+    await page.keyboard.type('h');
+    // We expect the menu to still be visible and filtered
+    await expect(slashMenu).toBeVisible();
+    await expect(slashMenu.locator('button').first()).toBeVisible();
+  });
+
   test('should preserve line breaks with Shift+Enter', async ({ page }) => {
     await waitForTiptap(page);
     await page.locator('.ProseMirror').first().focus();

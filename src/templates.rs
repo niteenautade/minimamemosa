@@ -2095,6 +2095,19 @@ var debouncedLinkSearch = debounce(function(q) { searchLinkMemos(q) }, 200);
                 onUpdate: function() {
                     var ed = window.tiptapEditor;
                     if (!ed) return;
+                    var view = ed.view;
+                    if (view) {
+                        setTimeout(function() {
+                            var tb = view.state.doc.textBetween(0, view.state.selection.$anchor.pos, '\n', '');
+                            var m = tb.match(/(^|\s)\/([a-z]*)$/i);
+                            if (m) {
+                                showSlashMenu(m[2] || '', mountEl, view);
+                            } else {
+                                var _sm = document.getElementById('slash-menu');
+                                if (_sm && !_sm.classList.contains('hidden')) hideSlashMenu();
+                            }
+                        }, 0);
+                    }
                     var isEmpty = ed.isEmpty;
                     if (isEmpty) {
                         document.getElementById('memo-editor-input').value = '';
@@ -2841,6 +2854,19 @@ const MEMO_EDIT_FORM: &str = r##"<form id="memo-edit-form-{{ id }}" class="memo-
                     onUpdate: function() {
                         var ed = editEditor;
                         if (!ed) return;
+                        var view = ed.view;
+                        if (view) {
+                            setTimeout(function() {
+                                var tb = view.state.doc.textBetween(0, view.state.selection.$anchor.pos, '\n', '');
+                                var m = tb.match(/(^|\s)\/([a-z]*)$/i);
+                                if (m) {
+                                    showSlashMenu(m[2] || '', mountEl, view);
+                                } else {
+                                    var _sm = document.getElementById('slash-menu');
+                                    if (_sm && !_sm.classList.contains('hidden')) hideSlashMenu();
+                                }
+                            }, 0);
+                        }
                         var isEmpty = ed.isEmpty;
                         if (isEmpty) {
                             document.getElementById('memo-edit-input-{{ id }}').value = '';
