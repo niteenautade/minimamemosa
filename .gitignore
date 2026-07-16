@@ -2,3 +2,28 @@
 node_modules
 data
 .kilo
+.gemini
+
+# SQLite
+*.db
+
+# Test artifacts
+test-results/
+
+# Build
+build.log
+
+# Environment
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
